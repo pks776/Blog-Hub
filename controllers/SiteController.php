@@ -8,6 +8,7 @@ use Yii;
 use app\models\ContactForm;
 use app\models\LoginForm;
 use app\models\User;
+use app\models\Post;
 use yii\base\Security;
 use yii\captcha\CaptchaAction;
 use yii\filters\AccessControl;
@@ -51,7 +52,17 @@ class SiteController extends Controller
             ],
         ];
     }
+public function actionBlogs()
+{
+    $posts = Post::find()
+        ->where(['status' => 'published'])
+        ->orderBy(['created_at' => SORT_DESC])
+        ->all();
 
+    return $this->render('blogs', [
+        'posts' => $posts,
+    ]);
+}
     public function actions(): array
     {
         return [
@@ -78,11 +89,43 @@ class SiteController extends Controller
         ]);
     }
 
-    public function actionIndex(): string
-    {
-        return $this->render('index');
+ public function actionIndex()
+{
+    if (Yii::$app->user->isGuest) {
+        return $this->redirect(['site/blogs']);
     }
 
+    $totalUsers = \app\models\User::find()->count();
+
+    $totalPosts = \app\models\Post::find()->count();
+
+    $publishedPosts = \app\models\Post::find()
+        ->where(['status' => \app\models\Post::STATUS_PUBLISHED])
+        ->count();
+
+    $draftPosts = \app\models\Post::find()
+        ->where(['status' => \app\models\Post::STATUS_DRAFT])
+        ->count();
+
+    return $this->render('index', [
+        'totalUsers' => $totalUsers,
+        'totalPosts' => $totalPosts,
+        'publishedPosts' => $publishedPosts,
+        'draftPosts' => $draftPosts,
+    ]);
+}
+public function actionAdmin()
+{
+    if (Yii::$app->user->isGuest) {
+        return $this->redirect(['site/login']);
+    }
+
+    if (!Yii::$app->user->can('manageUsers')) {
+        throw new \yii\web\ForbiddenHttpException('Access Denied');
+    }
+
+    return $this->render('admin');
+}
     public function actionLogin(): Response|string
     {
         if (!Yii::$app->user->isGuest) {
@@ -91,9 +134,9 @@ class SiteController extends Controller
 
         $model = new LoginForm($this->security);
 
-        if ($model->load($this->request->post()) && $model->login()) {
-            return $this->goBack();
-        }
+       if ($model->load($this->request->post()) && $model->login()) {
+    return $this->redirect(['site/dashboard']);
+}
 
         $model->password = '';
 
@@ -101,13 +144,20 @@ class SiteController extends Controller
             'model' => $model,
         ]);
     }
-
-    public function actionLogout(): Response
-    {
-        Yii::$app->user->logout();
-
-        return $this->goHome();
+public function actionDashboard()
+{
+    if (Yii::$app->user->isGuest) {
+        return $this->redirect(['site/login']);
     }
+
+    return $this->render('dashboard');
+}
+public function actionLogout(): Response
+{
+    Yii::$app->user->logout();
+
+    return $this->goHome();
+}
 
     public function actionContact(): Response|string
     {
@@ -138,4 +188,23 @@ class SiteController extends Controller
     {
         return $this->render('about');
     }
+
+    public function actionSignup()
+{
+    $model = new \app\models\SignupForm();
+
+    if ($model->load(Yii::$app->request->post()) && $model->signup()) {
+
+        Yii::$app->session->setFlash(
+            'success',
+            'Registration successful! Please login.'
+        );
+
+        return $this->redirect(['login']);
+    }
+
+    return $this->render('signup', [
+        'model' => $model,
+    ]);
+}
 }

@@ -67,27 +67,27 @@ $labelOptions = ['class' => 'form-label fw-semibold small'];
                     <?php $form = ActiveForm::begin(['id' => 'login-form']); ?>
 
                     <div class="mb-3">
-                        <?= $form->field($model, 'username', [
-                            'options' => ['class' => 'mb-0'],
-                            'template' => sprintf($htmlIcon, '&#128100;'),
-                            'inputOptions' => [
-                                'class' => 'form-control',
-                                'placeholder' => 'username',
-                                'autofocus' => true,
-                            ],
-                        ])->textInput()->label('Your Username', $labelOptions) ?>
-                    </div>
+    <?= $form->field($model, 'username', [
+        'options' => ['class' => 'mb-0'],
+        'template' => sprintf($htmlIcon, '&#128100;'),
+        'inputOptions' => [
+            'class' => 'form-control',
+            'placeholder' => 'Enter your email',
+            'autofocus' => true,
+        ],
+    ])->textInput()->label('Email', $labelOptions) ?>
+</div>
 
-                    <div class="mb-3">
-                        <?= $form->field($model, 'password', [
-                            'options' => ['class' => 'mb-0'],
-                            'template' => sprintf($htmlIcon, '&#128274;'),
-                            'inputOptions' => [
-                                'class' => 'form-control',
-                                'placeholder' => 'Password',
-                            ],
-                        ])->passwordInput()->label('Your Password', $labelOptions) ?>
-                    </div>
+<div class="mb-3">
+    <?= $form->field($model, 'password', [
+        'options' => ['class' => 'mb-0'],
+        'template' => sprintf($htmlIcon, '&#128274;'),
+        'inputOptions' => [
+            'class' => 'form-control',
+            'placeholder' => 'Password',
+        ],
+    ])->passwordInput()->label('Password', $labelOptions) ?>
+</div>
 
                     <div class="mb-4">
                         <?= $form->field($model, 'rememberMe')->checkbox() ?>
@@ -105,14 +105,13 @@ $labelOptions = ['class' => 'form-label fw-semibold small'];
 
                     <?php ActiveForm::end(); ?>
 
-                    <div class="text-body-secondary text-center mt-3 small">
-                        You may login with <strong>admin/admin</strong> or <strong>demo/demo</strong>.<br>
-                        To modify the username/password, check <code>app\models\User::$users</code>.
-                    </div>
-
                 </div>
             </div>
 
         </div>
     </div>
+    <p class="mt-3">
+    Don't have an account?
+    <?= \yii\helpers\Html::a('Register here', ['site/signup']) ?>
+</p>
 </div>

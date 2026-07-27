@@ -13,21 +13,31 @@ $items = [
         'label' => 'Home',
         'url' => ['/site/index'],
     ],
+
     [
-        'label' => 'About',
-        'url' => ['/site/about'],
+        'label' => 'Manage',
+        'url' => Yii::$app->user->isGuest
+            ? ['/site/login']
+            : (
+                Yii::$app->user->identity->role == 'admin'
+                    ? ['/site/dashboard']
+                    : (
+                        Yii::$app->user->identity->role == 'moderator'
+                            ? ['/post/pending']
+                            : ['/post/my-posts']
+                    )
+            ),
+        'visible' => !Yii::$app->user->isGuest,
     ],
-    [
-        'label' => 'Contact',
-        'url' => ['/site/contact'],
-    ],
+
     [
         'label' => 'Login',
         'url' => ['/site/login'],
         'visible' => Yii::$app->user->isGuest,
     ],
+
     [
-        'label' => 'Logout (' . Html::encode(Yii::$app->user->identity?->username ?? '') . ')',
+        'label' => 'Logout (' . Html::encode(Yii::$app->user->identity?->name ?? '') . ')',
         'url' => ['/site/logout'],
         'linkOptions' => [
             'data-method' => 'post',

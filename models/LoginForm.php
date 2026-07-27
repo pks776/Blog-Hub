@@ -37,31 +37,25 @@ class LoginForm extends Model
             ['password', 'validatePassword'],
         ];
     }
+public function validatePassword(string $attribute, ?array $params = null): void
+{
+    $user = $this->getUser();
 
-    public function validatePassword(string $attribute, ?array $params = null): void
-    {
-        if (!$this->hasErrors()) {
-            $user = $this->getUser();
-
-            if (
-                !$user ||
-                !$this->security->validatePassword($this->password, $user->password_hash)
-            ) {
-                $this->addError($attribute, 'Incorrect username or password.');
-            }
-        }
+    if (!$user || $this->password !== $user->password_hash) {
+        $this->addError($attribute, 'Incorrect email or password.');
     }
+}
 
     public function login(): bool
     {
-        if ($this->validate()) {
-           return Yii::$app->user->login(
-    $this->getUser(),
-    $this->rememberMe ? 3600 * 24 * 30 : 0
-);
+        if (!$this->validate()) {
+            return false;
         }
 
-        return false;
+        return Yii::$app->user->login(
+            $this->getUser(),
+            $this->rememberMe ? 3600 * 24 * 30 : 0
+        );
     }
 
     public function getUser(): ?User

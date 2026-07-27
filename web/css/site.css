@@ -231,10 +231,10 @@ a.desc:after {
 
 /* centered page layout */
 .site-login,
-.site-contact,
+
 .site-index,
 .site-error,
-.site-about,
+
 .site-contact-success {
     flex: 1;
 }

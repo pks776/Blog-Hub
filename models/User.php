@@ -8,34 +8,47 @@ use yii\web\IdentityInterface;
 
 class User extends ActiveRecord implements IdentityInterface
 {
+    /**
+     * Returns the table name.
+     */
     public static function tableName()
     {
         return 'users';
     }
 
+    /**
+     * Validation rules.
+     */
     public function rules()
     {
         return [
             [['role'], 'default', 'value' => 'blogger'],
             [['status'], 'default', 'value' => 1],
+
             [['name', 'email', 'password_hash'], 'required'],
+
             [['status'], 'integer'],
             [['created_at', 'updated_at'], 'safe'],
+
             [['name'], 'string', 'max' => 100],
             [['email'], 'string', 'max' => 150],
             [['password_hash'], 'string', 'max' => 255],
             [['role'], 'string', 'max' => 20],
+
             [['email'], 'unique'],
         ];
     }
 
+    /**
+     * Attribute labels.
+     */
     public function attributeLabels()
     {
         return [
             'id' => 'ID',
             'name' => 'Name',
             'email' => 'Email',
-            'password_hash' => 'Password Hash',
+            'password_hash' => 'Password',
             'role' => 'Role',
             'status' => 'Status',
             'created_at' => 'Created At',
@@ -43,6 +56,9 @@ class User extends ActiveRecord implements IdentityInterface
         ];
     }
 
+    /**
+     * Find user by email.
+     */
     public static function findByUsername($username): ?self
     {
         return self::find()
@@ -50,6 +66,9 @@ class User extends ActiveRecord implements IdentityInterface
             ->one();
     }
 
+    /**
+     * Validate password.
+     */
     public function validatePassword($password): bool
     {
         return Yii::$app->security->validatePassword(
@@ -58,9 +77,9 @@ class User extends ActiveRecord implements IdentityInterface
         );
     }
 
-    // ===========================
+    // ==========================
     // IdentityInterface Methods
-    // ===========================
+    // ==========================
 
     public static function findIdentity($id): ?IdentityInterface
     {
@@ -74,7 +93,7 @@ class User extends ActiveRecord implements IdentityInterface
 
     public function getId(): int
     {
-        return $this->id;
+        return (int)$this->id;
     }
 
     public function getAuthKey(): string
@@ -85,5 +104,13 @@ class User extends ActiveRecord implements IdentityInterface
     public function validateAuthKey($authKey): bool
     {
         return true;
+    }
+
+    /**
+     * Relation: User has many Posts.
+     */
+    public function getPosts()
+    {
+        return $this->hasMany(Post::class, ['author_id' => 'id']);
     }
 }

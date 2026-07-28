@@ -41,7 +41,7 @@ public function validatePassword(string $attribute, ?array $params = null): void
 {
     $user = $this->getUser();
 
-    if (!$user || $this->password !== $user->password_hash) {
+    if (!$user || !$user->validatePassword($this->password)) {
         $this->addError($attribute, 'Incorrect email or password.');
     }
 }

@@ -79,6 +79,10 @@ public function actionCreate()
 
     if ($this->request->isPost && $model->load($this->request->post())) {
 
+        // Hash the password before saving
+        $model->password_hash = Yii::$app->security
+            ->generatePasswordHash($model->password_hash);
+
         if ($model->save()) {
 
             Yii::$app->session->setFlash(
@@ -100,11 +104,7 @@ public function actionCreate()
         'model' => $model,
     ]);
 }
-
-    /**
-     * Updates an existing User model.
-     */
-   public function actionUpdate($id)
+ public function actionUpdate($id)
 {
     if (!Yii::$app->user->can('manageUsers')) {
         throw new \yii\web\ForbiddenHttpException('Access Denied');
@@ -112,7 +112,19 @@ public function actionCreate()
 
     $model = $this->findModel($id);
 
+    // Store the existing hashed password
+    $oldPassword = $model->password_hash;
+
     if ($this->request->isPost && $model->load($this->request->post())) {
+
+        // If a new password is entered, hash it
+        if (!empty($model->password_hash)) {
+            $model->password_hash = Yii::$app->security
+                ->generatePasswordHash($model->password_hash);
+        } else {
+            // Keep the old hashed password
+            $model->password_hash = $oldPassword;
+        }
 
         if ($model->save()) {
 
@@ -127,6 +139,9 @@ public function actionCreate()
             ]);
         }
     }
+
+    // Clear the password field so the hash isn't shown in the form
+    $model->password_hash = '';
 
     return $this->render('update', [
         'model' => $model,

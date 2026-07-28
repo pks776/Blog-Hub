@@ -105,7 +105,7 @@ public function actionView($id)
         if ($model->save()) {
             Yii::$app->session->setFlash(
                 'success',
-                'Your blog has been submitted for moderator approval.'
+                'Your blog has been submitted for Admin approval.'
             );
 
             return $this->redirect(['my-posts']);

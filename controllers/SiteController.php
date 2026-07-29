@@ -147,11 +147,25 @@ public function actionAdmin()
 public function actionDashboard()
 {
     if (Yii::$app->user->isGuest) {
-        return $this->redirect(['site/login']);
+        return $this->redirect(['login']);
     }
 
-    return $this->render('dashboard');
+$posts = Post::find()
+    ->orderBy(['created_at' => SORT_DESC])
+    ->all();
+    
+    if (Yii::$app->user->identity->role == 'moderator') {
+        $posts = \app\models\Post::find()
+            ->where(['status' => \app\models\Post::STATUS_PENDING])
+            ->orderBy(['created_at' => SORT_DESC])
+            ->all();
+    }
+
+    return $this->render('dashboard', [
+        'posts' => $posts,
+    ]);
 }
+
 public function actionLogout(): Response
 {
     Yii::$app->user->logout();

@@ -39,10 +39,67 @@ $this->params['breadcrumbs'][] = $this->title;
             },
         ],
         [
-            'class' => ActionColumn::className(),
-            'urlCreator' => function ($action, User $model, $key, $index, $column) {
-                return Url::toRoute([$action, 'id' => $model->id]);
-            },
-        ],
+    'class' => ActionColumn::class,
+
+    'template' => '{view} {update} {delete} {makeModerator} {removeModerator}',
+
+    'urlCreator' => function ($action, User $model, $key, $index, $column) {
+        return Url::toRoute([$action, 'id' => $model->id]);
+    },
+
+    'buttons' => [
+
+        'makeModerator' => function ($url, User $model) {
+
+            if (
+                Yii::$app->user->identity->role === 'admin' &&
+                $model->role === 'blogger' &&
+                $model->id != Yii::$app->user->id
+            ) {
+
+                return Html::a(
+                    'Make Moderator',
+                    ['make-moderator', 'id' => $model->id],
+                    [
+                        'class' => 'btn btn-sm btn-primary',
+                        'title' => 'Make Moderator',
+                        'data' => [
+                            'confirm' => 'Promote this user to Moderator?',
+                            'method' => 'post',
+                        ],
+                    ]
+                );
+            }
+
+            return '';
+        },
+
+        'removeModerator' => function ($url, User $model) {
+
+            if (
+                Yii::$app->user->identity->role === 'admin' &&
+                $model->role === 'moderator' &&
+                $model->id != Yii::$app->user->id
+            ) {
+
+                return Html::a(
+                    'Remove Moderator',
+                    ['remove-moderator', 'id' => $model->id],
+                    [
+                        'class' => 'btn btn-sm btn-warning',
+                        'title' => 'Remove Moderator',
+                        'data' => [
+                            'confirm' => 'Remove Moderator role?',
+                            'method' => 'post',
+                        ],
+                    ]
+                );
+            }
+
+            return '';
+        },
+
+    ],
+],
     ],
 ]); ?>

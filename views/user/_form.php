@@ -22,10 +22,13 @@ use yii\widgets\ActiveForm;
     'placeholder' => 'Enter Password',
 ]) ?>
 
-    <?= $form->field($model, 'role')->dropDownList([
-        'admin' => 'Admin',
-        'blogger' => 'Blogger',
-    ], ['prompt' => 'Select Role']) ?>
+ <?= $form->field($model, 'role')->dropDownList([
+    'admin' => 'Admin',
+    'moderator' => 'Moderator',
+    'blogger' => 'Blogger',
+], [
+    'prompt' => 'Select Role'
+]) ?>
 
     <?= $form->field($model, 'status')->dropDownList([
         1 => 'Active',

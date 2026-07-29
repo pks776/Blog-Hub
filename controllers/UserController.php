@@ -6,9 +6,7 @@ use app\models\User;
 use app\models\UserSearch;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
-use yii\filters\VerbFilter;
-use yii\filters\AccessControl;
-use yii\web\ForbiddenHttpException;
+
 use Yii;
 
 class UserController extends Controller
@@ -18,8 +16,17 @@ class UserController extends Controller
     return [
         'access' => [
             'class' => \yii\filters\AccessControl::class,
-            'only' => ['index', 'view', 'create', 'update', 'delete'],
-            'rules' => [
+'only' => [
+    'index',
+    'view',
+    'create',
+    'update',
+    'delete',
+    'make-moderator',
+    'remove-moderator',
+],         
+   'rules' => [
+
                 [
                     'allow' => true,
                     'roles' => ['manageUsers'],
@@ -29,9 +36,12 @@ class UserController extends Controller
         'verbs' => [
             'class' => \yii\filters\VerbFilter::class,
             'actions' => [
-                'delete' => ['POST'],
+    'delete' => ['POST'],
+    'make-moderator' => ['POST'],
+    'remove-moderator' => ['POST'],
+],
             ],
-        ],
+        
     ];
 }
 
@@ -178,6 +188,49 @@ return $this->redirect(['index']);
     /**
      * Finds the User model.
      */
+   public function actionMakeModerator($id)
+{
+    if (Yii::$app->user->identity->role !== 'admin') {
+        throw new \yii\web\ForbiddenHttpException('Access Denied');
+    }
+
+    $model = $this->findModel($id);
+
+    if ($model->role === 'blogger') {
+        $model->role = 'moderator';
+        $model->save(false);
+
+        Yii::$app->session->setFlash(
+            'success',
+            "{$model->name} has been promoted to Moderator."
+        );
+    }
+
+    return $this->redirect(['index']);
+}
+
+public function actionRemoveModerator($id)
+{
+    if (Yii::$app->user->identity->role !== 'admin') {
+        throw new \yii\web\ForbiddenHttpException('Access Denied');
+    }
+
+    $model = $this->findModel($id);
+
+    if ($model->role === 'moderator') {
+        $model->role = 'blogger';
+        $model->save(false);
+
+        Yii::$app->session->setFlash(
+            'success',
+            "{$model->name} has been changed to Blogger."
+        );
+    }
+
+    return $this->redirect(['index']);
+}
+
+
     protected function findModel($id)
     {
 

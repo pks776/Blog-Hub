@@ -31,6 +31,10 @@ $user = Yii::$app->user->identity;
 <?php elseif ($user->role == 'moderator'): ?>
 
     <p>
+        <?= Html::a('All Blogs', ['post/index'], ['class' => 'btn btn-primary']) ?>
+    </p>
+
+    <p>
         <?= Html::a('Pending Blogs', ['post/pending'], ['class' => 'btn btn-warning']) ?>
     </p>
 

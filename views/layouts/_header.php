@@ -14,21 +14,11 @@ $items = [
         'url' => ['/site/index'],
     ],
 
-    [
-        'label' => 'Manage',
-        'url' => Yii::$app->user->isGuest
-            ? ['/site/login']
-            : (
-                Yii::$app->user->identity->role == 'admin'
-                    ? ['/site/dashboard']
-                    : (
-                        Yii::$app->user->identity->role == 'moderator'
-                            ? ['/post/pending']
-                            : ['/post/my-posts']
-                    )
-            ),
-        'visible' => !Yii::$app->user->isGuest,
-    ],
+   [
+    'label' => 'Manage',
+    'url' => ['/site/dashboard'],
+    'visible' => !Yii::$app->user->isGuest,
+],
 
     [
         'label' => 'Login',

@@ -25,13 +25,17 @@ class PostController extends Controller
             ],
         ],
     ];
+        
 }
     /**
      * All Posts
      */
     public function actionIndex()
 {
-    if (Yii::$app->user->identity->role != 'admin') {
+    if (
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator'
+    ) {
         throw new ForbiddenHttpException('Access Denied');
     }
 
@@ -43,7 +47,7 @@ class PostController extends Controller
         'dataProvider' => $dataProvider,
     ]);
 }
-    /**
+   /**
      * My Posts
      */
   public function actionMyPosts()
@@ -67,22 +71,38 @@ class PostController extends Controller
     /**
      * View Post
      */
-public function actionView($id)
+   public function actionView($id)
 {
     $model = $this->findModel($id);
 
-    if (
-        $model->status != Post::STATUS_PUBLISHED &&
-        Yii::$app->user->identity->role != 'admin' &&
-        Yii::$app->user->identity->role != 'moderator' &&
-        $model->author_id != Yii::$app->user->id
-    ) {
+    if ($model->status == Post::STATUS_PUBLISHED) {
+        return $this->render('view', [
+            'model' => $model,
+        ]);
+    }
+
+    if (Yii::$app->user->isGuest) {
         throw new ForbiddenHttpException('Access Denied');
     }
 
-    return $this->render('view', [
-        'model' => $model,
-    ]);
+    $role = Yii::$app->user->identity->role;
+
+    if (in_array($role, ['admin', 'moderator'])) {
+        return $this->render('view', [
+            'model' => $model,
+        ]);
+    }
+
+    if (
+        $role == 'blogger' &&
+        $model->author_id == Yii::$app->user->id
+    ) {
+        return $this->render('view', [
+            'model' => $model,
+        ]);
+    }
+
+    throw new ForbiddenHttpException('Access Denied');
 }
 
     /**
@@ -119,23 +139,24 @@ public function actionView($id)
     /**
      * Update Post
      */
-  public function actionUpdate($id)
+public function actionUpdate($id)
 {
-   $model = $this->findModel($id);
+    $model = $this->findModel($id);
+    $role = Yii::$app->user->identity->role;
 
-if (
-    Yii::$app->user->identity->role == 'blogger' &&
-    $model->author_id != Yii::$app->user->id
-) {
-    throw new ForbiddenHttpException('You cannot edit this post.');
-}
+    if ($role == 'blogger') {
 
-if (
-    Yii::$app->user->identity->role == 'blogger' &&
-    $model->status == Post::STATUS_PUBLISHED
-) {
-    throw new ForbiddenHttpException('Published posts cannot be edited.');
-}
+        if ($model->author_id != Yii::$app->user->id) {
+            throw new ForbiddenHttpException('You cannot edit this blog.');
+        }
+
+        if ($model->status == Post::STATUS_PUBLISHED) {
+            throw new ForbiddenHttpException('Published blogs cannot be edited.');
+        }
+    }
+
+    // Admin & Moderator can edit every blog
+
     if ($model->load(Yii::$app->request->post()) && $model->save()) {
 
         Yii::$app->session->setFlash(
@@ -143,11 +164,9 @@ if (
             'Blog updated successfully.'
         );
 
-        if (Yii::$app->user->identity->role == 'admin') {
-    return $this->redirect(['index']);
-}
-
-return $this->redirect(['my-posts']);
+        return ($role == 'blogger')
+            ? $this->redirect(['my-posts'])
+            : $this->redirect(['index']);
     }
 
     return $this->render('update', [
@@ -155,22 +174,22 @@ return $this->redirect(['my-posts']);
     ]);
 }
 
-    /**
-     * Delete Post
-     */
-    public function actionDelete($id)
+//delete
+
+public function actionDelete($id)
 {
     $model = $this->findModel($id);
+    $role = Yii::$app->user->identity->role;
 
-if (
-    Yii::$app->user->identity->role == 'blogger' &&
-    (
-        $model->author_id != Yii::$app->user->id ||
-        $model->status == Post::STATUS_PUBLISHED
-    )
-) {
-    throw new ForbiddenHttpException('You cannot delete this post.');
-}
+    if ($role == 'blogger') {
+
+        if (
+            $model->author_id != Yii::$app->user->id ||
+            $model->status == Post::STATUS_PUBLISHED
+        ) {
+            throw new ForbiddenHttpException('You cannot delete this blog.');
+        }
+    }
 
     $model->delete();
 
@@ -179,21 +198,20 @@ if (
         'Blog deleted successfully.'
     );
 
-   if (Yii::$app->user->identity->role == 'admin') {
-    return $this->redirect(['index']);
+    return ($role == 'blogger')
+        ? $this->redirect(['my-posts'])
+        : $this->redirect(['index']);
 }
 
-return $this->redirect(['my-posts']);
-}
 
-    /**
-     * Approve Post
-     */
-    public function actionApprove($id)
+
+// approve post
+
+public function actionApprove($id)
 {
     if (
-        Yii::$app->user->identity->role != 'moderator' &&
-        Yii::$app->user->identity->role != 'admin'
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator'
     ) {
         throw new ForbiddenHttpException('Access Denied');
     }
@@ -201,21 +219,24 @@ return $this->redirect(['my-posts']);
     $post = $this->findModel($id);
 
     $post->status = Post::STATUS_PUBLISHED;
-    $post->save(false);
 
-    Yii::$app->session->setFlash('success', 'Blog approved successfully.');
+    if ($post->save(false)) {
+        Yii::$app->session->setFlash(
+            'success',
+            'Blog approved successfully.'
+        );
+    }
 
-    return $this->redirect(['pending']);
+    return $this->redirect(['index']);
 }
 
-    /**
-     * Reject Post
-     */
-    public function actionReject($id)
+//reject post
+
+public function actionReject($id)
 {
     if (
-        Yii::$app->user->identity->role != 'moderator' &&
-        Yii::$app->user->identity->role != 'admin'
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator'
     ) {
         throw new ForbiddenHttpException('Access Denied');
     }
@@ -223,16 +244,20 @@ return $this->redirect(['my-posts']);
     $post = $this->findModel($id);
 
     $post->status = Post::STATUS_REJECTED;
-    $post->save(false);
 
-    Yii::$app->session->setFlash('success', 'Blog rejected.');
+    if ($post->save(false)) {
+        Yii::$app->session->setFlash(
+            'success',
+            'Blog rejected successfully.'
+        );
+    }
 
-    return $this->redirect(['pending']);
+    return $this->redirect(['index']);
 }
-
     /**
      * Pending Posts
      */
+    
     public function actionPending()
 {
     if (

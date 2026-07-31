@@ -10,6 +10,7 @@ use yii\filters\VerbFilter;
 use yii\helpers\Inflector;
 use Yii;
 use yii\web\ForbiddenHttpException;
+use app\models\RejectForm;
 
 class PostController extends Controller
 {
@@ -21,11 +22,11 @@ class PostController extends Controller
             'actions' => [
                 'delete' => ['POST'],
                 'approve' => ['POST'],
-                'reject' => ['POST'],
+                'reject' => ['GET', 'POST'],
+                'unpublish' => ['POST'],
             ],
         ],
     ];
-        
 }
     /**
      * All Posts
@@ -158,7 +159,11 @@ public function actionUpdate($id)
 
         // If blogger edits, send it for approval again
         if ($role == 'blogger') {
+
             $model->status = Post::STATUS_PENDING;
+
+            // Clear the previous rejection comment
+            $model->rejection_reason = null;
         }
 
         if ($model->save()) {
@@ -225,7 +230,8 @@ public function actionApprove($id)
 
     $post = $this->findModel($id);
 
-    $post->status = Post::STATUS_PUBLISHED;
+   $post->status = Post::STATUS_PUBLISHED;
+$post->rejection_reason = null;
 
     if ($post->save(false)) {
         Yii::$app->session->setFlash(
@@ -236,10 +242,9 @@ public function actionApprove($id)
 
     return $this->redirect(['index']);
 }
+//action unpublish
 
-//reject post
-
-public function actionReject($id)
+public function actionUnpublish($id)
 {
     if (
         Yii::$app->user->identity->role != 'admin' &&
@@ -250,16 +255,50 @@ public function actionReject($id)
 
     $post = $this->findModel($id);
 
-    $post->status = Post::STATUS_REJECTED;
+    $post->status = Post::STATUS_PENDING;
+    $post->rejection_reason = null;
 
     if ($post->save(false)) {
+
         Yii::$app->session->setFlash(
             'success',
-            'Blog rejected successfully.'
+            'Blog unpublished successfully.'
         );
     }
 
     return $this->redirect(['index']);
+}
+//reject post
+
+public function actionReject($id)
+{
+    if (!in_array(Yii::$app->user->identity->role, ['admin', 'moderator'])) {
+        throw new ForbiddenHttpException('Access Denied');
+    }
+
+    $post = $this->findModel($id);
+    $rejectForm = new RejectForm();
+
+    if ($rejectForm->load(Yii::$app->request->post()) && $rejectForm->validate()) {
+
+        $post->status = Post::STATUS_REJECTED;
+        $post->rejection_reason = $rejectForm->reason;
+
+        if ($post->save(false)) {
+
+            Yii::$app->session->setFlash(
+                'success',
+                'Blog rejected successfully.'
+            );
+
+            return $this->redirect(['index']);
+        }
+    }
+
+    return $this->render('reject', [
+        'model' => $post,
+        'rejectForm' => $rejectForm,
+    ]);
 }
     /**
      * Pending Posts

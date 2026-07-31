@@ -75,6 +75,18 @@ $this->params['breadcrumbs'][] = $this->title;
                     }
                 },
             ],
+            [
+    'attribute' => 'rejection_reason',
+    'label' => 'Moderator Feedback',
+    'value' => function ($model) {
+
+        if ($model->status == Post::STATUS_REJECTED) {
+            return $model->rejection_reason;
+        }
+
+        return '-';
+    }
+],
 
             [
                 'attribute' => 'created_at',
@@ -83,78 +95,118 @@ $this->params['breadcrumbs'][] = $this->title;
             ],
 
             [
-                'class' => ActionColumn::class,
+    'class' => ActionColumn::class,
 
-                'urlCreator' => function ($action, Post $model, $key, $index, $column) {
-                    return Url::toRoute([$action, 'id' => $model->id]);
-                },
+    'urlCreator' => function ($action, Post $model, $key, $index, $column) {
+        return Url::toRoute([$action, 'id' => $model->id]);
+    },
 
-                'template' => '{view} {update} {delete}',
+    'template' => '{view} {update} {delete} {approve} {reject} {unpublish}',
 
-                'visibleButtons' => [
+    'visibleButtons' => [
 
-                    'view' => function ($model) {
+        'view' => function ($model) {
+            return true;
+        },
 
-                        $role = Yii::$app->user->identity->role;
+        'update' => function ($model) {
 
-                        return in_array($role, ['admin', 'moderator']);
-                    },
+            $role = Yii::$app->user->identity->role;
 
-                    'update' => function ($model) {
+            if (in_array($role, ['admin', 'moderator'])) {
+                return true;
+            }
 
-                        $role = Yii::$app->user->identity->role;
+            return $role == 'blogger'
+                && $model->author_id == Yii::$app->user->id;
+        },
 
-                        // Admin & Moderator
-                        if (in_array($role, ['admin', 'moderator'])) {
-                            return true;
-                        }
+        'delete' => function ($model) {
 
-                        // Blogger can edit only own posts
-                        if (
-                            $role == 'blogger' &&
-                            $model->author_id == Yii::$app->user->id
-                        ) {
-                            return true;
-                        }
+            $role = Yii::$app->user->identity->role;
 
-                        return false;
-                    },
+            if (in_array($role, ['admin', 'moderator'])) {
+                return true;
+            }
 
-                    'delete' => function ($model) {
+            return $role == 'blogger'
+                && $model->author_id == Yii::$app->user->id
+                && $model->status != Post::STATUS_PUBLISHED;
+        },
 
-                        $role = Yii::$app->user->identity->role;
+        // Show Approve only for Pending posts
+        'approve' => function ($model) {
 
-                        return in_array($role, ['admin', 'moderator']);
-                    },
+            return in_array(Yii::$app->user->identity->role, ['admin', 'moderator'])
+                && $model->status == Post::STATUS_PENDING;
+        },
 
+        // Show Reject only for Pending posts
+        'reject' => function ($model) {
+
+            return in_array(Yii::$app->user->identity->role, ['admin', 'moderator'])
+                && $model->status == Post::STATUS_PENDING;
+        },
+
+        // Show Unpublish only for Published posts
+        'unpublish' => function ($model) {
+
+            return in_array(Yii::$app->user->identity->role, ['admin', 'moderator'])
+                && $model->status == Post::STATUS_PUBLISHED;
+        },
+    ],
+
+    'buttons' => [
+
+        'view' => function ($url) {
+            return Html::a('View', $url, [
+                'class' => 'btn btn-info btn-sm me-1',
+            ]);
+        },
+
+        'update' => function ($url) {
+            return Html::a('Edit', $url, [
+                'class' => 'btn btn-primary btn-sm me-1',
+            ]);
+        },
+
+        'delete' => function ($url) {
+            return Html::a('Delete', $url, [
+                'class' => 'btn btn-danger btn-sm me-1',
+                'data' => [
+                    'confirm' => 'Are you sure you want to delete this blog?',
+                    'method' => 'post',
                 ],
+            ]);
+        },
 
-                'buttons' => [
-
-                    'view' => function ($url) {
-                        return Html::a('View', $url, [
-                            'class' => 'btn btn-info btn-sm me-1',
-                        ]);
-                    },
-
-                    'update' => function ($url) {
-                        return Html::a('Edit', $url, [
-                            'class' => 'btn btn-primary btn-sm me-1',
-                        ]);
-                    },
-
-                    'delete' => function ($url) {
-                        return Html::a('Delete', $url, [
-                            'class' => 'btn btn-danger btn-sm',
-                            'data' => [
-                                'confirm' => 'Are you sure you want to delete this blog?',
-                                'method' => 'post',
-                            ],
-                        ]);
-                    },
-
+        'approve' => function ($url) {
+            return Html::a('Approve', $url, [
+                'class' => 'btn btn-success btn-sm me-1',
+                'data' => [
+                    'method' => 'post',
+                    'confirm' => 'Approve this blog?',
                 ],
-            ],
+            ]);
+        },
+
+        'reject' => function ($url) {
+            return Html::a('Reject', $url, [
+                'class' => 'btn btn-warning btn-sm me-1',
+            ]);
+        },
+
+        'unpublish' => function ($url) {
+            return Html::a('Unpublish', $url, [
+                'class' => 'btn btn-secondary btn-sm',
+                'data' => [
+                    'method' => 'post',
+                    'confirm' => 'Unpublish this blog?',
+                ],
+            ]);
+        },
+    ],
+],
 
         ],
     ]); ?>

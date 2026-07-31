@@ -55,6 +55,7 @@ class Post extends \yii\db\ActiveRecord
             ['status', 'in', 'range' => array_keys(self::optsStatus())],
 
             [['slug'], 'unique'],
+            [['rejection_reason'], 'string'],
 
             [
                 ['author_id'],
@@ -81,6 +82,7 @@ class Post extends \yii\db\ActiveRecord
             'author_id' => 'Author',
             'created_at' => 'Created At',
             'updated_at' => 'Updated At',
+            'rejection_reason' => 'Moderator Comment',
         ];
     }
 

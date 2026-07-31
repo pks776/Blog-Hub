@@ -144,29 +144,36 @@ public function actionUpdate($id)
     $model = $this->findModel($id);
     $role = Yii::$app->user->identity->role;
 
+    // Blogger can edit only their own blogs
     if ($role == 'blogger') {
 
         if ($model->author_id != Yii::$app->user->id) {
             throw new ForbiddenHttpException('You cannot edit this blog.');
         }
-
-        if ($model->status == Post::STATUS_PUBLISHED) {
-            throw new ForbiddenHttpException('Published blogs cannot be edited.');
-        }
     }
 
     // Admin & Moderator can edit every blog
 
-    if ($model->load(Yii::$app->request->post()) && $model->save()) {
+    if ($model->load(Yii::$app->request->post())) {
 
-        Yii::$app->session->setFlash(
-            'success',
-            'Blog updated successfully.'
-        );
+        // If blogger edits, send it for approval again
+        if ($role == 'blogger') {
+            $model->status = Post::STATUS_PENDING;
+        }
 
-        return ($role == 'blogger')
-            ? $this->redirect(['my-posts'])
-            : $this->redirect(['index']);
+        if ($model->save()) {
+
+            Yii::$app->session->setFlash(
+                'success',
+                ($role == 'blogger')
+                    ? 'Blog updated and sent for approval.'
+                    : 'Blog updated successfully.'
+            );
+
+            return ($role == 'blogger')
+                ? $this->redirect(['my-posts'])
+                : $this->redirect(['index']);
+        }
     }
 
     return $this->render('update', [

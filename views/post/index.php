@@ -3,8 +3,8 @@
 use app\models\Post;
 use yii\helpers\Html;
 use yii\helpers\Url;
-use yii\grid\ActionColumn;
 use yii\grid\GridView;
+use yii\grid\ActionColumn;
 
 /** @var yii\web\View $this */
 /** @var app\models\PostSearch $searchModel */
@@ -93,53 +93,67 @@ $this->params['breadcrumbs'][] = $this->title;
 
                 'visibleButtons' => [
 
-                    'view' => function () {
-                        return in_array(
-                            Yii::$app->user->identity->role,
-                            ['admin', 'moderator']
-                        );
+                    'view' => function ($model) {
+
+                        $role = Yii::$app->user->identity->role;
+
+                        return in_array($role, ['admin', 'moderator']);
                     },
 
-                    'update' => function () {
-                        return in_array(
-                            Yii::$app->user->identity->role,
-                            ['admin', 'moderator']
-                        );
+                    'update' => function ($model) {
+
+                        $role = Yii::$app->user->identity->role;
+
+                        // Admin & Moderator
+                        if (in_array($role, ['admin', 'moderator'])) {
+                            return true;
+                        }
+
+                        // Blogger can edit only own posts
+                        if (
+                            $role == 'blogger' &&
+                            $model->author_id == Yii::$app->user->id
+                        ) {
+                            return true;
+                        }
+
+                        return false;
                     },
 
-                    'delete' => function () {
-                        return in_array(
-                            Yii::$app->user->identity->role,
-                            ['admin', 'moderator']
-                        );
+                    'delete' => function ($model) {
+
+                        $role = Yii::$app->user->identity->role;
+
+                        return in_array($role, ['admin', 'moderator']);
                     },
 
                 ],
 
                 'buttons' => [
 
-    'view' => function ($url) {
-        return Html::a('View', $url, [
-            'class' => 'btn btn-info btn-sm me-1',
-        ]);
-    },
+                    'view' => function ($url) {
+                        return Html::a('View', $url, [
+                            'class' => 'btn btn-info btn-sm me-1',
+                        ]);
+                    },
 
-    'update' => function ($url) {
-        return Html::a('Edit', $url, [
-            'class' => 'btn btn-primary btn-sm me-1',
-        ]);
-    },
+                    'update' => function ($url) {
+                        return Html::a('Edit', $url, [
+                            'class' => 'btn btn-primary btn-sm me-1',
+                        ]);
+                    },
 
-    'delete' => function ($url) {
-        return Html::a('Delete', $url, [
-            'class' => 'btn btn-danger btn-sm',
-            'data' => [
-                'confirm' => 'Are you sure you want to delete this blog?',
-                'method' => 'post',
-            ],
-        ]);
-    },
-],
+                    'delete' => function ($url) {
+                        return Html::a('Delete', $url, [
+                            'class' => 'btn btn-danger btn-sm',
+                            'data' => [
+                                'confirm' => 'Are you sure you want to delete this blog?',
+                                'method' => 'post',
+                            ],
+                        ]);
+                    },
+
+                ],
             ],
 
         ],

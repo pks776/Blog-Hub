@@ -11,7 +11,7 @@ use yii\helpers\Inflector;
 use Yii;
 use yii\web\ForbiddenHttpException;
 use app\models\RejectForm;
-
+use yii\web\UploadedFile;
 class PostController extends Controller
 {
     public function behaviors()
@@ -109,34 +109,52 @@ class PostController extends Controller
     /**
      * Create Post
      */
-   public function actionCreate()
-{
-    if (Yii::$app->user->identity->role != 'blogger') {
-        throw new ForbiddenHttpException('Access Denied');
-    }
-
-    $model = new Post();
-
-    if ($model->load(Yii::$app->request->post())) {
-
-        $model->author_id = Yii::$app->user->id;
-        $model->status = Post::STATUS_PENDING;
-        $model->slug = Inflector::slug($model->title);
-
-        if ($model->save()) {
-            Yii::$app->session->setFlash(
-                'success',
-                'Your blog has been submitted for Admin approval.'
-            );
-
-            return $this->redirect(['my-posts']);
+    public function actionCreate()
+    {
+        if (Yii::$app->user->identity->role != 'blogger') {
+            throw new ForbiddenHttpException('Access Denied');
         }
-    }
 
-    return $this->render('create', [
-        'model' => $model,
-    ]);
-}
+        $model = new Post();
+
+        if ($model->load(Yii::$app->request->post())) {
+
+            $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
+
+            $model->author_id = Yii::$app->user->id;
+            $model->status = Post::STATUS_PENDING;
+            $model->slug = Inflector::slug($model->title);
+
+            // Validate FIRST
+            if ($model->validate()) {
+
+                if ($model->imageFile) {
+
+                    $fileName = uniqid() . '.' . $model->imageFile->extension;
+
+                    $model->imageFile->saveAs(
+                        Yii::getAlias('@webroot/uploads/posts/') . $fileName
+                    );
+
+                    $model->image = $fileName;
+                }
+
+                // Save without validating again
+                $model->save(false);
+
+                Yii::$app->session->setFlash(
+                    'success',
+                    'Your blog has been submitted for Admin approval.'
+                );
+
+                return $this->redirect(['my-posts']);
+            }
+        }
+
+        return $this->render('create', [
+            'model' => $model,
+        ]);
+    }
     /**
      * Update Post
      */
@@ -144,6 +162,9 @@ public function actionUpdate($id)
 {
     $model = $this->findModel($id);
     $role = Yii::$app->user->identity->role;
+
+    // Store old image
+    $oldImage = $model->image;
 
     // Blogger can edit only their own blogs
     if ($role == 'blogger') {
@@ -157,12 +178,45 @@ public function actionUpdate($id)
 
     if ($model->load(Yii::$app->request->post())) {
 
-        // If blogger edits, send it for approval again
+        // Get uploaded image
+        $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
+
+        // If a new image is uploaded
+        if ($model->imageFile) {
+
+            // Delete old image if it exists
+            if (
+                $oldImage &&
+                file_exists(Yii::getAlias('@webroot/uploads/posts/') . $oldImage)
+            ) {
+                unlink(Yii::getAlias('@webroot/uploads/posts/') . $oldImage);
+            }
+
+            // Generate unique filename
+            $fileName = time() . '_' .
+                $model->imageFile->baseName . '.' .
+                $model->imageFile->extension;
+
+            // Save image
+            $model->imageFile->saveAs(
+                Yii::getAlias('@webroot/uploads/posts/') . $fileName
+            );
+
+            // Save filename in database
+            $model->image = $fileName;
+
+        } else {
+
+            // Keep existing image
+            $model->image = $oldImage;
+        }
+
+        // Blogger edits go back for approval
         if ($role == 'blogger') {
 
             $model->status = Post::STATUS_PENDING;
 
-            // Clear the previous rejection comment
+            // Clear previous rejection comment
             $model->rejection_reason = null;
         }
 
@@ -185,7 +239,6 @@ public function actionUpdate($id)
         'model' => $model,
     ]);
 }
-
 //delete
 
 public function actionDelete($id)
@@ -203,6 +256,12 @@ public function actionDelete($id)
         }
     }
 
+    if (
+    $model->image &&
+    file_exists(Yii::getAlias('@webroot/uploads/posts/') . $model->image)
+) {
+    unlink(Yii::getAlias('@webroot/uploads/posts/') . $model->image);
+}
     $model->delete();
 
     Yii::$app->session->setFlash(

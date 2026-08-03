@@ -24,47 +24,66 @@ $this->title = 'BlogHub';
 
             <?php foreach ($posts as $post): ?>
 
-                <div class="col-md-4 mb-4">
+                <div class="col-lg-4 col-md-6 mb-4">
 
                     <div class="card shadow-sm h-100">
 
                         <?php if (!empty($post->image)): ?>
 
-                            <img src="<?= Yii::getAlias('@web/uploads/') . $post->image ?>"
-                                 class="card-img-top"
-                                 alt="<?= Html::encode($post->title) ?>"
-                                 style="height:220px;object-fit:cover;">
+                            <?= Html::img(
+                                Yii::getAlias('@web') . '/uploads/posts/' . $post->image,
+                                [
+                                    'class' => 'card-img-top',
+                                    'alt' => Html::encode($post->title),
+                                    'style' => 'height:220px; width:100%; object-fit:cover;',
+                                ]
+                            ) ?>
 
                         <?php else: ?>
 
-                            <div class="bg-light text-center py-5">
-                                <h5>No Image</h5>
+                            <div class="d-flex align-items-center justify-content-center bg-light"
+                                 style="height:220px;">
+
+                                <span class="text-muted">No Image Available</span>
+
                             </div>
 
                         <?php endif; ?>
 
                         <div class="card-body d-flex flex-column">
 
-                            <h4><?= Html::encode($post->title) ?></h4>
+                            <h4 class="card-title">
+                                <?= Html::encode($post->title) ?>
+                            </h4>
 
                             <p class="text-muted mb-2">
+
                                 By
                                 <strong>
                                     <?= Html::encode($post->author ? $post->author->name : 'Unknown Author') ?>
                                 </strong>
+
                                 <br>
+
                                 <?= Yii::$app->formatter->asDate($post->created_at) ?>
+
                             </p>
 
                             <p class="flex-grow-1">
-                                <?= Html::encode(mb_substr(strip_tags($post->content), 0, 120)) ?>...
+
+                                <?= Html::encode(
+                                    mb_substr(strip_tags($post->content), 0, 120)
+                                ) ?>...
+
                             </p>
 
-                           <?= Html::a(
-    'Read More',
-    ['post/view', 'id' => $post->id],
-    ['class' => 'btn btn-primary w-100']
-) ?>
+                            <?= Html::a(
+                                'Read More',
+                                ['post/view', 'id' => $post->id],
+                                [
+                                    'class' => 'btn btn-primary w-100'
+                                ]
+                            ) ?>
 
                         </div>
 

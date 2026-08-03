@@ -6,6 +6,21 @@ use yii\helpers\Html;
 
 $this->title = $model->title;
 ?>
+<?php if ($model->image): ?>
+
+    <div class="mb-3">
+
+        <?= Html::img(
+            Yii::getAlias('@web/uploads/posts/') . $model->image,
+            [
+                'class' => 'img-fluid rounded',
+                'style' => 'max-width:500px'
+            ]
+        ) ?>
+
+    </div>
+
+<?php endif; ?>
 
 <h1><?= Html::encode($model->title) ?></h1>
 

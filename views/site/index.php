@@ -7,7 +7,6 @@ use yii\helpers\Html;
 /** @var int $totalUsers */
 /** @var int $totalPosts */
 /** @var int $publishedPosts */
-/** @var int $draftPosts */
 
 $this->title = 'Dashboard';
 ?>
@@ -45,14 +44,6 @@ $this->title = 'Dashboard';
             </div>
         </div>
 
-        <div class="col-md-3 mb-3">
-            <div class="card text-white bg-warning">
-                <div class="card-body">
-                    <h5>Draft Posts</h5>
-                    <h2><?= $draftPosts ?></h2>
-                </div>
-            </div>
-        </div>
 
     </div>
 

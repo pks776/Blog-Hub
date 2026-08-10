@@ -103,15 +103,11 @@ public function actionBlogs()
         ->where(['status' => \app\models\Post::STATUS_PUBLISHED])
         ->count();
 
-    $draftPosts = \app\models\Post::find()
-        ->where(['status' => \app\models\Post::STATUS_DRAFT])
-        ->count();
 
     return $this->render('index', [
         'totalUsers' => $totalUsers,
         'totalPosts' => $totalPosts,
         'publishedPosts' => $publishedPosts,
-        'draftPosts' => $draftPosts,
     ]);
 }
 public function actionAdmin()

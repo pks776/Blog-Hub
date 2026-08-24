@@ -10,7 +10,6 @@ use yii\filters\VerbFilter;
 use yii\helpers\Inflector;
 use Yii;
 use yii\web\ForbiddenHttpException;
-use app\models\RejectForm;
 use yii\web\BadRequestHttpException;
 use yii\web\UploadedFile;
 use app\models\PostVersion;
@@ -120,7 +119,9 @@ public function actionMyPosts()
 
     throw new ForbiddenHttpException('Access Denied');
 }
-
+/**
+     * ActionRejectVersion
+     */
 public function actionRejectVersion($id)
 {
     if (
@@ -420,6 +421,9 @@ public function actionUpdate($id)
         'model' => $model,
     ]);
 }
+/**
+     * ActionViewVersion
+     */
 
 public function actionViewVersion($id)
 {

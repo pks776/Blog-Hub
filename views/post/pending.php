@@ -3,7 +3,7 @@
 use yii\helpers\Html;
 
 /* @var $this yii\web\View */
-/* @var $posts app\models\Post[] */
+/* @var $versions app\models\PostVersion[] */
 
 $this->title = 'Pending Blogs';
 ?>
@@ -12,7 +12,7 @@ $this->title = 'Pending Blogs';
 
     <h2 class="mb-4">Pending Blogs</h2>
 
-    <?php if (empty($posts)): ?>
+    <?php if (empty($versions)): ?>
 
         <div class="alert alert-info">
             No pending blogs found.
@@ -24,7 +24,8 @@ $this->title = 'Pending Blogs';
 
             <thead class="table-dark">
                 <tr>
-                    <th>ID</th>
+                    <th>Post ID</th>
+                    <th>Version</th>
                     <th>Title</th>
                     <th>Author</th>
                     <th>Status</th>
@@ -35,55 +36,83 @@ $this->title = 'Pending Blogs';
 
             <tbody>
 
-            <?php foreach ($posts as $post): ?>
+            <?php foreach ($versions as $version): ?>
 
                 <tr>
 
-                    <td><?= $post->id ?></td>
+                    <td>
+                        <?= Html::encode($version->post_id) ?>
+                    </td>
 
-                    <td><?= Html::encode($post->title) ?></td>
+                    <td>
+                        <strong>
+                            Version <?= Html::encode($version->version) ?>
+                        </strong>
+                    </td>
 
-                    <td><?= Html::encode($post->author->name) ?></td>
+                    <td>
+                        <?= Html::encode($version->title) ?>
+                    </td>
+
+                    <td>
+                        <?= Html::encode(
+                            $version->post->author->name ?? 'Unknown Author'
+                        ) ?>
+                    </td>
 
                     <td>
                         <span class="badge bg-warning text-dark">
-                            <?= ucfirst($post->status) ?>
+                            <?= Html::encode(
+                                ucfirst($version->status)
+                            ) ?>
                         </span>
                     </td>
 
                     <td>
-                        <?= Yii::$app->formatter->asDate($post->created_at) ?>
+                        <?= Yii::$app->formatter->asDate(
+                            $version->created_at
+                        ) ?>
                     </td>
 
                     <td>
 
+                        <!-- View Version -->
                         <?= Html::a(
                             'View',
-                            ['view', 'id' => $post->id],
-                            ['class' => 'btn btn-info btn-sm']
+                            [
+                                '/post/view-version',
+                                'id' => $version->id,
+                            ],
+                            [
+                                'class' => 'btn btn-info btn-sm',
+                            ]
                         ) ?>
 
+                        <!-- Approve Version -->
                         <?= Html::a(
                             'Approve',
-                            ['approve', 'id' => $post->id],
+                            [
+                                '/post/approve-version',
+                                'id' => $version->id,
+                            ],
                             [
                                 'class' => 'btn btn-success btn-sm',
                                 'data' => [
-                                    'confirm' => 'Approve this blog?',
+                                    'confirm' => 'Approve this version?',
                                     'method' => 'post',
                                 ],
                             ]
                         ) ?>
 
+                        <!-- Reject Version -->
                         <?= Html::a(
                             'Reject',
-                            ['reject', 'id' => $post->id],
+                            [
+                                '/post/reject-version',
+                                'id' => $version->id,
+                            ],
                             [
                                 'class' => 'btn btn-danger btn-sm',
-                                'data' => [
-                                    'confirm' => 'Reject this blog?',
-                                    'method' => 'post',
-                                ],
                             ]
                         ) ?>
 

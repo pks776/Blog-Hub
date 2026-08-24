@@ -2,8 +2,8 @@
 
 namespace app\models;
 
-use Yii;
 use app\models\User;
+use app\models\PostVersion;
 use yii\web\UploadedFile;
 
 class Post extends \yii\db\ActiveRecord
@@ -12,6 +12,7 @@ class Post extends \yii\db\ActiveRecord
     const STATUS_PENDING = 'pending';
     const STATUS_PUBLISHED = 'published';
     const STATUS_REJECTED = 'rejected';
+    const STATUS_DELETED = 'deleted';
 
     // Virtual attribute for file upload
     public $imageFile;
@@ -32,6 +33,7 @@ class Post extends \yii\db\ActiveRecord
         return [
 
             [['slug', 'image'], 'default', 'value' => null],
+
             [['status'], 'default', 'value' => self::STATUS_DRAFT],
 
             [['title', 'content', 'author_id'], 'required'],
@@ -44,7 +46,11 @@ class Post extends \yii\db\ActiveRecord
 
             [['title', 'slug', 'image'], 'string', 'max' => 255],
 
-            ['status', 'in', 'range' => array_keys(self::optsStatus())],
+            [
+                'status',
+                'in',
+                'range' => array_keys(self::optsStatus())
+            ],
 
             [['slug'], 'unique'],
 
@@ -59,7 +65,12 @@ class Post extends \yii\db\ActiveRecord
             [
                 ['imageFile'],
                 'file',
-                'extensions' => ['jpg', 'jpeg', 'png', 'webp'],
+                'extensions' => [
+                    'jpg',
+                    'jpeg',
+                    'png',
+                    'webp'
+                ],
                 'checkExtensionByMimeType' => false,
                 'skipOnEmpty' => true,
                 'maxSize' => 5 * 1024 * 1024,
@@ -93,9 +104,28 @@ class Post extends \yii\db\ActiveRecord
      */
     public function getAuthor()
     {
-        return $this->hasOne(User::class, ['id' => 'author_id']);
+        return $this->hasOne(
+            User::class,
+            ['id' => 'author_id']
+        );
     }
 
+    /**
+     * Relation with PostVersion
+     */
+    public function getVersions()
+    {
+        return $this->hasMany(
+            PostVersion::class,
+            ['post_id' => 'id']
+        )->orderBy([
+            'version' => SORT_DESC
+        ]);
+    }
+
+    /**
+     * Status options
+     */
     public static function optsStatus()
     {
         return [
@@ -103,14 +133,21 @@ class Post extends \yii\db\ActiveRecord
             self::STATUS_PENDING => 'Pending',
             self::STATUS_PUBLISHED => 'Published',
             self::STATUS_REJECTED => 'Rejected',
+            self::STATUS_DELETED => 'Deleted',
         ];
     }
 
+    /**
+     * Display status
+     */
     public function displayStatus()
     {
         return self::optsStatus()[$this->status] ?? '';
     }
 
+    /**
+     * Draft
+     */
     public function isStatusDraft()
     {
         return $this->status === self::STATUS_DRAFT;
@@ -121,6 +158,9 @@ class Post extends \yii\db\ActiveRecord
         $this->status = self::STATUS_DRAFT;
     }
 
+    /**
+     * Pending
+     */
     public function isStatusPending()
     {
         return $this->status === self::STATUS_PENDING;
@@ -131,6 +171,9 @@ class Post extends \yii\db\ActiveRecord
         $this->status = self::STATUS_PENDING;
     }
 
+    /**
+     * Published
+     */
     public function isStatusPublished()
     {
         return $this->status === self::STATUS_PUBLISHED;
@@ -141,6 +184,9 @@ class Post extends \yii\db\ActiveRecord
         $this->status = self::STATUS_PUBLISHED;
     }
 
+    /**
+     * Rejected
+     */
     public function isStatusRejected()
     {
         return $this->status === self::STATUS_REJECTED;
@@ -149,5 +195,18 @@ class Post extends \yii\db\ActiveRecord
     public function setStatusToRejected()
     {
         $this->status = self::STATUS_REJECTED;
+    }
+
+    /**
+     * Deleted
+     */
+    public function isStatusDeleted()
+    {
+        return $this->status === self::STATUS_DELETED;
+    }
+
+    public function setStatusToDeleted()
+    {
+        $this->status = self::STATUS_DELETED;
     }
 }

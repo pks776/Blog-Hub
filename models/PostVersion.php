@@ -21,15 +21,51 @@ class PostVersion extends ActiveRecord
     public function rules()
     {
         return [
-            [['post_id', 'version', 'title', 'content', 'created_by'], 'required'],
+            [
+                [
+                    'post_id',
+                    'version',
+                    'title',
+                    'content',
+                    'created_by'
+                ],
+                'required'
+            ],
 
-            [['post_id', 'version', 'created_by', 'reviewed_by'], 'integer'],
+            [
+                [
+                    'post_id',
+                    'version',
+                    'created_by',
+                    'reviewed_by'
+                ],
+                'integer'
+            ],
 
-            [['content', 'rejection_reason'], 'string'],
+            [
+                [
+                    'content',
+                    'rejection_reason'
+                ],
+                'string'
+            ],
 
-            [['created_at', 'updated_at'], 'safe'],
+            [
+                [
+                    'created_at',
+                    'updated_at'
+                ],
+                'safe'
+            ],
 
-            [['title', 'image'], 'string', 'max' => 255],
+            [
+                [
+                    'title',
+                    'image'
+                ],
+                'string',
+                'max' => 255
+            ],
 
             [
                 'status',
@@ -46,18 +82,36 @@ class PostVersion extends ActiveRecord
         ];
     }
 
+    /**
+     * Relation to Post
+     */
     public function getPost()
     {
-        return $this->hasOne(Post::class, ['id' => 'post_id']);
+        return $this->hasOne(
+            Post::class,
+            ['id' => 'post_id']
+        );
     }
 
+    /**
+     * User who created the version
+     */
     public function getCreator()
     {
-        return $this->hasOne(User::class, ['id' => 'created_by']);
+        return $this->hasOne(
+            User::class,
+            ['id' => 'created_by']
+        );
     }
 
+    /**
+     * User who reviewed the version
+     */
     public function getReviewer()
     {
-        return $this->hasOne(User::class, ['id' => 'reviewed_by']);
+        return $this->hasOne(
+            User::class,
+            ['id' => 'reviewed_by']
+        );
     }
 }

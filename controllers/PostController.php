@@ -11,23 +11,27 @@ use yii\helpers\Inflector;
 use Yii;
 use yii\web\ForbiddenHttpException;
 use app\models\RejectForm;
+use yii\web\BadRequestHttpException;
 use yii\web\UploadedFile;
+use app\models\PostVersion;
+
 class PostController extends Controller
 {
     public function behaviors()
-{
-    return [
-        'verbs' => [
-            'class' => VerbFilter::class,
-            'actions' => [
-                'delete' => ['POST'],
-                'approve' => ['POST'],
-                'reject' => ['GET', 'POST'],
-                'unpublish' => ['POST'],
+    {
+        return [
+            'verbs' => [
+                'class' => VerbFilter::class,
+                'actions' => [
+                    'delete' => ['POST'],
+                    'approve-version' => ['POST'],
+                    'reject-version' => ['GET', 'POST'],
+                    'unpublish' => ['POST'],
+                ],
             ],
-        ],
-    ];
-}
+        ];
+    }
+
     /**
      * All Posts
      */
@@ -51,7 +55,7 @@ class PostController extends Controller
    /**
      * My Posts
      */
-  public function actionMyPosts()
+public function actionMyPosts()
 {
     if (Yii::$app->user->identity->role != 'blogger') {
         throw new ForbiddenHttpException('Access Denied');
@@ -64,9 +68,20 @@ class PostController extends Controller
         'author_id' => Yii::$app->user->id,
     ]);
 
+    // Get pending edited versions
+    $pendingVersions = PostVersion::find()
+        ->innerJoinWith('post')
+        ->where([
+            'posts.author_id' => Yii::$app->user->id,
+            'post_versions.status' => PostVersion::STATUS_PENDING,
+        ])
+        ->orderBy(['post_versions.created_at' => SORT_DESC])
+        ->all();
+
     return $this->render('index', [
         'searchModel' => $searchModel,
         'dataProvider' => $dataProvider,
+        'pendingVersions' => $pendingVersions,
     ]);
 }
     /**
@@ -106,41 +121,171 @@ class PostController extends Controller
     throw new ForbiddenHttpException('Access Denied');
 }
 
+public function actionRejectVersion($id)
+{
+    if (
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator'
+    ) {
+        throw new ForbiddenHttpException('Access Denied');
+    }
+
+    $version = PostVersion::findOne($id);
+
+    if ($version === null) {
+        throw new NotFoundHttpException('Version not found.');
+    }
+
+    // Only pending versions can be rejected
+    if ($version->status !== PostVersion::STATUS_PENDING) {
+        throw new BadRequestHttpException(
+            'This version is not pending. Current status: ' . $version->status
+        );
+    }
+
+    // Show rejection form
+    if (!Yii::$app->request->isPost) {
+        return $this->render('reject-version', [
+            'version' => $version,
+        ]);
+    }
+
+    // Get rejection reason
+    $reason = trim(
+        Yii::$app->request->post('rejection_reason', '')
+    );
+
+    // Reason is required
+    if ($reason === '') {
+
+        Yii::$app->session->setFlash(
+            'error',
+            'Please enter a rejection reason.'
+        );
+
+        return $this->render('reject-version', [
+            'version' => $version,
+        ]);
+    }
+
+    $transaction = Yii::$app->db->beginTransaction();
+
+    try {
+
+        // Find the main post
+        $post = Post::findOne($version->post_id);
+
+        if ($post === null) {
+            throw new NotFoundHttpException('Post not found.');
+        }
+
+        // Reject the version
+        $version->status = PostVersion::STATUS_REJECTED;
+        $version->rejection_reason = $reason;
+        $version->reviewed_by = Yii::$app->user->id;
+        $version->updated_at = date('Y-m-d H:i:s');
+
+        if (!$version->save(false)) {
+            throw new \Exception('Unable to reject the blog version.');
+        }
+
+        // Update the main post
+        $post->status = Post::STATUS_REJECTED;
+        $post->rejection_reason = $reason;
+        $post->updated_at = date('Y-m-d H:i:s');
+
+        if (!$post->save(false)) {
+            throw new \Exception('Unable to update the blog status.');
+        }
+
+        $transaction->commit();
+
+        Yii::$app->session->setFlash(
+            'success',
+            'Blog rejected successfully.'
+        );
+
+        return $this->redirect(['pending']);
+
+    } catch (\Throwable $e) {
+
+        $transaction->rollBack();
+
+        Yii::error(
+            'Reject Version Error: ' . $e->getMessage(),
+            __METHOD__
+        );
+
+        throw $e;
+    }
+}
     /**
      * Create Post
      */
-    public function actionCreate()
-    {
-        if (Yii::$app->user->identity->role != 'blogger') {
-            throw new ForbiddenHttpException('Access Denied');
-        }
+public function actionCreate()
+{
+    if (Yii::$app->user->identity->role != 'blogger') {
+        throw new ForbiddenHttpException('Access Denied');
+    }
 
-        $model = new Post();
+    $model = new Post();
 
-        if ($model->load(Yii::$app->request->post())) {
+    if ($model->load(Yii::$app->request->post())) {
 
-            $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
+        $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
 
-            $model->author_id = Yii::$app->user->id;
-            $model->status = Post::STATUS_PENDING;
-            $model->slug = Inflector::slug($model->title);
+        $model->author_id = Yii::$app->user->id;
+        $model->status = Post::STATUS_PENDING;
+        $model->slug = Inflector::slug($model->title);
 
-            // Validate FIRST
-            if ($model->validate()) {
+        // Validate FIRST
+        if ($model->validate()) {
 
+            $transaction = Yii::$app->db->beginTransaction();
+
+            try {
+
+                // Upload image
                 if ($model->imageFile) {
 
                     $fileName = uniqid() . '.' . $model->imageFile->extension;
 
+                    $uploadPath = Yii::getAlias('@webroot/uploads/posts/');
+
+                    if (!is_dir($uploadPath)) {
+                        mkdir($uploadPath, 0777, true);
+                    }
+
                     $model->imageFile->saveAs(
-                        Yii::getAlias('@webroot/uploads/posts/') . $fileName
+                        $uploadPath . $fileName
                     );
 
                     $model->image = $fileName;
                 }
 
-                // Save without validating again
-                $model->save(false);
+                // Save main post
+                if (!$model->save(false)) {
+                    throw new \Exception('Unable to save post.');
+                }
+
+                // Create Version 1
+                $version = new PostVersion();
+
+                $version->post_id = $model->id;
+                $version->version = 1;
+                $version->title = $model->title;
+                $version->content = $model->content;
+                $version->image = $model->image;
+                $version->status = PostVersion::STATUS_PENDING;
+                $version->created_by = Yii::$app->user->id;
+                $version->created_at = date('Y-m-d H:i:s');
+                $version->updated_at = date('Y-m-d H:i:s');
+
+                if (!$version->save()) {
+                    throw new \Exception('Unable to save post version.');
+                }
+
+                $transaction->commit();
 
                 Yii::$app->session->setFlash(
                     'success',
@@ -148,13 +293,22 @@ class PostController extends Controller
                 );
 
                 return $this->redirect(['my-posts']);
+
+            } catch (\Throwable $e) {
+
+                $transaction->rollBack();
+
+                Yii::error($e->getMessage());
+
+                throw $e;
             }
         }
-
-        return $this->render('create', [
-            'model' => $model,
-        ]);
     }
+
+    return $this->render('create', [
+        'model' => $model,
+    ]);
+}
     /**
      * Update Post
      */
@@ -163,117 +317,184 @@ public function actionUpdate($id)
     $model = $this->findModel($id);
     $role = Yii::$app->user->identity->role;
 
-    // Store old image
-    $oldImage = $model->image;
-
-    // Blogger can edit only their own blogs
-    if ($role == 'blogger') {
-
-        if ($model->author_id != Yii::$app->user->id) {
-            throw new ForbiddenHttpException('You cannot edit this blog.');
-        }
+    // Only bloggers can edit blogs
+    if ($role != 'blogger') {
+        throw new ForbiddenHttpException(
+            'Only bloggers can edit blogs.'
+        );
     }
 
-    // Admin & Moderator can edit every blog
+    // Blogger can edit only their own blogs
+    if ($model->author_id != Yii::$app->user->id) {
+        throw new ForbiddenHttpException(
+            'You cannot edit this blog.'
+        );
+    }
 
     if ($model->load(Yii::$app->request->post())) {
 
         // Get uploaded image
-        $model->imageFile = UploadedFile::getInstance($model, 'imageFile');
+        $imageFile = UploadedFile::getInstance(
+            $model,
+            'imageFile'
+        );
 
-        // If a new image is uploaded
-        if ($model->imageFile) {
+        // Keep the current image
+        $image = $model->image;
 
-            // Delete old image if it exists
-            if (
-                $oldImage &&
-                file_exists(Yii::getAlias('@webroot/uploads/posts/') . $oldImage)
-            ) {
-                unlink(Yii::getAlias('@webroot/uploads/posts/') . $oldImage);
-            }
+        // Upload new image if provided
+        if ($imageFile) {
 
-            // Generate unique filename
             $fileName = time() . '_' .
-                $model->imageFile->baseName . '.' .
-                $model->imageFile->extension;
+                $imageFile->baseName . '.' .
+                $imageFile->extension;
 
-            // Save image
-            $model->imageFile->saveAs(
-                Yii::getAlias('@webroot/uploads/posts/') . $fileName
+            $uploadPath = Yii::getAlias(
+                '@webroot/uploads/posts/'
             );
 
-            // Save filename in database
-            $model->image = $fileName;
+            if (!is_dir($uploadPath)) {
+                mkdir($uploadPath, 0777, true);
+            }
 
-        } else {
+            if (!$imageFile->saveAs(
+                $uploadPath . $fileName
+            )) {
 
-            // Keep existing image
-            $model->image = $oldImage;
+                Yii::$app->session->setFlash(
+                    'error',
+                    'Unable to upload image.'
+                );
+
+                return $this->render('update', [
+                    'model' => $model,
+                ]);
+            }
+
+            $image = $fileName;
         }
 
-        // Blogger edits go back for approval
-        if ($role == 'blogger') {
+        // Get latest version number
+        $latestVersion = PostVersion::find()
+            ->where(['post_id' => $model->id])
+            ->max('version');
 
-            $model->status = Post::STATUS_PENDING;
+        $nextVersion = $latestVersion
+            ? $latestVersion + 1
+            : 1;
 
-            // Clear previous rejection comment
-            $model->rejection_reason = null;
-        }
+        // Create a new version
+        $version = new PostVersion();
 
-        if ($model->save()) {
+        $version->post_id = $model->id;
+        $version->version = $nextVersion;
+        $version->title = $model->title;
+        $version->content = $model->content;
+        $version->image = $image;
+        $version->status = PostVersion::STATUS_PENDING;
+        $version->created_by = Yii::$app->user->id;
+        $version->created_at = date('Y-m-d H:i:s');
+        $version->updated_at = date('Y-m-d H:i:s');
+
+        if ($version->save()) {
 
             Yii::$app->session->setFlash(
                 'success',
-                ($role == 'blogger')
-                    ? 'Blog updated and sent for approval.'
-                    : 'Blog updated successfully.'
+                'Blog updated and sent for approval.'
             );
 
-            return ($role == 'blogger')
-                ? $this->redirect(['my-posts'])
-                : $this->redirect(['index']);
+            return $this->redirect([
+                'my-posts'
+            ]);
         }
+
+        // Show version validation errors
+        Yii::$app->session->setFlash(
+            'error',
+            'Unable to create new version: ' .
+            json_encode($version->errors)
+        );
     }
 
     return $this->render('update', [
         'model' => $model,
     ]);
 }
+
+public function actionViewVersion($id)
+{
+    if (
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator'
+    ) {
+        throw new ForbiddenHttpException('Access Denied');
+    }
+
+    $version = PostVersion::findOne($id);
+
+    if ($version === null) {
+        throw new NotFoundHttpException('Version not found.');
+    }
+
+    return $this->render('view-version', [
+        'version' => $version,
+    ]);
+}
 //delete
 
 public function actionDelete($id)
 {
-    $model = $this->findModel($id);
-    $role = Yii::$app->user->identity->role;
-
-    if ($role == 'blogger') {
-
-        if (
-            $model->author_id != Yii::$app->user->id ||
-            $model->status == Post::STATUS_PUBLISHED
-        ) {
-            throw new ForbiddenHttpException('You cannot delete this blog.');
-        }
+    if (
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator' &&
+        Yii::$app->user->identity->role != 'blogger'
+    ) {
+        throw new ForbiddenHttpException('Access Denied');
     }
 
+    $post = $this->findModel($id);
+
+    $role = Yii::$app->user->identity->role;
+
+    // Blogger can delete only their own post
     if (
-    $model->image &&
-    file_exists(Yii::getAlias('@webroot/uploads/posts/') . $model->image)
-) {
-    unlink(Yii::getAlias('@webroot/uploads/posts/') . $model->image);
+        $role == 'blogger' &&
+        $post->author_id != Yii::$app->user->id
+    ) {
+        throw new ForbiddenHttpException('Access Denied');
+    }
+
+    // Published posts cannot be deleted by blogger
+    if (
+        $role == 'blogger' &&
+        $post->status == Post::STATUS_PUBLISHED
+    ) {
+        throw new ForbiddenHttpException(
+            'Published blogs cannot be deleted.'
+        );
+    }
+
+    // Soft delete instead of physically deleting the post
+    $post->status = Post::STATUS_DELETED;
+    $post->rejection_reason = null;
+
+    if ($post->save(false)) {
+
+        Yii::$app->session->setFlash(
+            'success',
+            'Blog deleted successfully.'
+        );
+
+    } else {
+
+        Yii::$app->session->setFlash(
+            'error',
+            'Unable to delete the blog.'
+        );
+    }
+
+    return $this->redirect(['index']);
 }
-    $model->delete();
-
-    Yii::$app->session->setFlash(
-        'success',
-        'Blog deleted successfully.'
-    );
-
-    return ($role == 'blogger')
-        ? $this->redirect(['my-posts'])
-        : $this->redirect(['index']);
-}
-
 
 
 // approve post
@@ -289,14 +510,62 @@ public function actionApprove($id)
 
     $post = $this->findModel($id);
 
-   $post->status = Post::STATUS_PUBLISHED;
-$post->rejection_reason = null;
+    $transaction = Yii::$app->db->beginTransaction();
 
-    if ($post->save(false)) {
+    try {
+
+        // Publish the main post
+        $post->status = Post::STATUS_PUBLISHED;
+        $post->rejection_reason = null;
+
+        if (!$post->save(false)) {
+            throw new \Exception('Unable to publish post.');
+        }
+
+        // Find the pending version
+        $version = PostVersion::find()
+            ->where([
+                'post_id' => $post->id,
+                'status' => PostVersion::STATUS_PENDING,
+            ])
+            ->orderBy(['version' => SORT_DESC])
+            ->one();
+
+        if ($version) {
+
+            // Make any previously published version outdated
+            PostVersion::updateAll(
+                ['status' => PostVersion::STATUS_OUTDATED],
+                [
+                    'post_id' => $post->id,
+                    'status' => PostVersion::STATUS_PUBLISHED,
+                ]
+            );
+
+            // Publish the new version
+            $version->status = PostVersion::STATUS_PUBLISHED;
+            $version->reviewed_by = Yii::$app->user->id;
+            $version->updated_at = date('Y-m-d H:i:s');
+
+            if (!$version->save(false)) {
+                throw new \Exception('Unable to publish post version.');
+            }
+        }
+
+        $transaction->commit();
+
         Yii::$app->session->setFlash(
             'success',
             'Blog approved successfully.'
         );
+
+    } catch (\Throwable $e) {
+
+        $transaction->rollBack();
+
+        Yii::error($e->getMessage());
+
+        throw $e;
     }
 
     return $this->redirect(['index']);
@@ -314,56 +583,151 @@ public function actionUnpublish($id)
 
     $post = $this->findModel($id);
 
-    $post->status = Post::STATUS_PENDING;
-    $post->rejection_reason = null;
+    $transaction = Yii::$app->db->beginTransaction();
 
-    if ($post->save(false)) {
+    try {
+
+        // Get the latest version number for this post
+        $latestVersion = PostVersion::find()
+            ->where(['post_id' => $post->id])
+            ->max('version');
+
+        // Create a new pending version
+        $version = new PostVersion();
+
+        $version->post_id = $post->id;
+        $version->version = ($latestVersion ?: 0) + 1;
+        $version->title = $post->title;
+        $version->content = $post->content;
+        $version->image = $post->image;
+        $version->status = PostVersion::STATUS_PENDING;
+        $version->created_by = Yii::$app->user->id;
+        $version->created_at = date('Y-m-d H:i:s');
+        $version->updated_at = date('Y-m-d H:i:s');
+
+        if (!$version->save()) {
+            throw new \Exception(
+                'Unable to create pending version: ' .
+                json_encode($version->errors)
+            );
+        }
+
+        // Change the main post to pending
+        $post->status = Post::STATUS_PENDING;
+        $post->rejection_reason = null;
+
+        if (!$post->save(false)) {
+            throw new \Exception('Unable to update post.');
+        }
+
+        $transaction->commit();
 
         Yii::$app->session->setFlash(
             'success',
-            'Blog unpublished successfully.'
+            'Blog has been sent for approval.'
         );
+
+    } catch (\Throwable $e) {
+
+        $transaction->rollBack();
+
+        Yii::error($e->getMessage());
+
+        throw $e;
     }
 
     return $this->redirect(['index']);
 }
-//reject post
 
-public function actionReject($id)
+/**
+     * ApproveVersion
+     */
+
+public function actionApproveVersion($id)
 {
-    if (!in_array(Yii::$app->user->identity->role, ['admin', 'moderator'])) {
+    if (
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator'
+    ) {
         throw new ForbiddenHttpException('Access Denied');
     }
 
-    $post = $this->findModel($id);
-    $rejectForm = new RejectForm();
+    $version = PostVersion::findOne($id);
 
-    if ($rejectForm->load(Yii::$app->request->post()) && $rejectForm->validate()) {
-
-        $post->status = Post::STATUS_REJECTED;
-        $post->rejection_reason = $rejectForm->reason;
-
-        if ($post->save(false)) {
-
-            Yii::$app->session->setFlash(
-                'success',
-                'Blog rejected successfully.'
-            );
-
-            return $this->redirect(['index']);
-        }
+    if ($version === null) {
+        throw new NotFoundHttpException('Version not found.');
     }
 
-    return $this->render('reject', [
-        'model' => $post,
-        'rejectForm' => $rejectForm,
-    ]);
+    // Make sure only pending versions can be approved
+    if ($version->status != PostVersion::STATUS_PENDING) {
+        throw new \yii\web\BadRequestHttpException(
+            'This version is not pending approval.'
+        );
+    }
+
+    // Find the original post
+    $post = Post::findOne($version->post_id);
+
+    if ($post === null) {
+        throw new NotFoundHttpException('Post not found.');
+    }
+
+    $transaction = Yii::$app->db->beginTransaction();
+
+    try {
+
+        // Make only the currently published version outdated
+        PostVersion::updateAll(
+            ['status' => PostVersion::STATUS_OUTDATED],
+            [
+                'post_id' => $post->id,
+                'status' => PostVersion::STATUS_PUBLISHED,
+            ]
+        );
+
+        // Update the main post with the approved version
+        $post->title = $version->title;
+        $post->content = $version->content;
+        $post->image = $version->image;
+        $post->status = Post::STATUS_PUBLISHED;
+        $post->rejection_reason = null;
+
+        if (!$post->save(false)) {
+            throw new \Exception('Unable to update post.');
+        }
+
+        // Mark this version as published
+        $version->status = PostVersion::STATUS_PUBLISHED;
+        $version->reviewed_by = Yii::$app->user->id;
+        $version->updated_at = date('Y-m-d H:i:s');
+
+        if (!$version->save(false)) {
+            throw new \Exception('Unable to update version.');
+        }
+
+        $transaction->commit();
+
+        Yii::$app->session->setFlash(
+            'success',
+            'Blog version approved successfully.'
+        );
+
+    } catch (\Throwable $e) {
+
+        $transaction->rollBack();
+
+        Yii::error($e->getMessage());
+
+        throw $e;
+    }
+
+    return $this->redirect(['pending']);
 }
     /**
      * Pending Posts
      */
     
-    public function actionPending()
+public function actionPending()
 {
     if (
         Yii::$app->user->identity->role != 'moderator' &&
@@ -372,16 +736,15 @@ public function actionReject($id)
         throw new ForbiddenHttpException('Access Denied');
     }
 
-    $posts = Post::find()
-        ->where(['status' => Post::STATUS_PENDING])
+    $versions = PostVersion::find()
+        ->where(['status' => PostVersion::STATUS_PENDING])
         ->orderBy(['created_at' => SORT_DESC])
         ->all();
 
     return $this->render('pending', [
-        'posts' => $posts,
+        'versions' => $versions,
     ]);
 }
-
     /**
      * Find Model
      */

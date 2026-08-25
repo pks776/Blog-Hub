@@ -9,7 +9,6 @@ use app\models\ContactForm;
 use app\models\LoginForm;
 use app\models\User;
 use app\models\Post;
-use app\models\PostVersion;
 use yii\base\Security;
 use yii\captcha\CaptchaAction;
 use yii\filters\AccessControl;
@@ -31,6 +30,9 @@ class SiteController extends Controller
         parent::__construct($id, $module, $config);
     }
 
+    /**
+     * Controller behaviors.
+     */
     public function behaviors(): array
     {
         return [
@@ -108,28 +110,34 @@ class SiteController extends Controller
      * Home page.
      *
      * Guest:
-     *      Published blogs
-     *
-     * Admin / Moderator:
-     *      Existing dashboard statistics
+     *      Redirects to published blogs.
      *
      * Blogger:
-     *      Personal blogger dashboard
+     *      Displays personal blogger dashboard.
+     *
+     * Admin / Moderator:
+     *      Displays the existing dashboard.
      */
 public function actionIndex()
 {
+    // Guest users
     if (Yii::$app->user->isGuest) {
         return $this->redirect(['site/blogs']);
     }
 
-    $userId = Yii::$app->user->id;
     $role = Yii::$app->user->identity->role;
 
-    // Blogger dashboard
+    // ==========================================
+    // BLOGGER DASHBOARD
+    // ==========================================
     if ($role === 'blogger') {
 
-        $totalPosts = Post::find()
-            ->where(['author_id' => $userId])
+        $userId = Yii::$app->user->id;
+
+        $myPosts = Post::find()
+            ->where([
+                'author_id' => $userId,
+            ])
             ->count();
 
         $publishedPosts = Post::find()
@@ -153,15 +161,18 @@ public function actionIndex()
             ])
             ->count();
 
-        return $this->render('index', [
-            'totalPosts' => $totalPosts,
+        return $this->render('blogger-dashboard', [
+            'myPosts' => $myPosts,
             'publishedPosts' => $publishedPosts,
             'pendingPosts' => $pendingPosts,
             'rejectedPosts' => $rejectedPosts,
         ]);
     }
 
-    // Admin / Moderator dashboard
+    // ==========================================
+    // ADMIN / MODERATOR DASHBOARD
+    // ==========================================
+
     $totalUsers = User::find()->count();
 
     $totalPosts = Post::find()->count();
@@ -172,10 +183,24 @@ public function actionIndex()
         ])
         ->count();
 
+    $pendingPosts = Post::find()
+        ->where([
+            'status' => Post::STATUS_PENDING,
+        ])
+        ->count();
+
+    $rejectedPosts = Post::find()
+        ->where([
+            'status' => Post::STATUS_REJECTED,
+        ])
+        ->count();
+
     return $this->render('index', [
         'totalUsers' => $totalUsers,
         'totalPosts' => $totalPosts,
         'publishedPosts' => $publishedPosts,
+        'pendingPosts' => $pendingPosts,
+        'rejectedPosts' => $rejectedPosts,
     ]);
 }
 
@@ -223,7 +248,7 @@ public function actionIndex()
     }
 
     /**
-     * Dashboard.
+     * Management dashboard.
      */
     public function actionDashboard()
     {
@@ -231,12 +256,20 @@ public function actionIndex()
             return $this->redirect(['login']);
         }
 
+        /*
+         * Default:
+         * Show all posts.
+         */
         $posts = Post::find()
             ->orderBy([
                 'created_at' => SORT_DESC,
             ])
             ->all();
 
+        /*
+         * Moderator:
+         * Show only pending posts.
+         */
         if (
             Yii::$app->user->identity->role === 'moderator'
         ) {

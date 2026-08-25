@@ -14,11 +14,17 @@ $items = [
         'url' => ['/site/index'],
     ],
 
-   [
-    'label' => 'Manage',
-    'url' => ['/site/dashboard'],
-    'visible' => !Yii::$app->user->isGuest,
-],
+    [
+        'label' => 'Manage',
+        'url' => ['/site/dashboard'],
+        'visible' => !Yii::$app->user->isGuest,
+    ],
+
+    [
+        'label' => 'Profile',
+        'url' => ['/profile/index'],
+        'visible' => !Yii::$app->user->isGuest,
+    ],
 
     [
         'label' => 'Login',
@@ -27,7 +33,9 @@ $items = [
     ],
 
     [
-        'label' => 'Logout (' . Html::encode(Yii::$app->user->identity?->name ?? '') . ')',
+        'label' => 'Logout (' . Html::encode(
+            Yii::$app->user->identity?->name ?? ''
+        ) . ')',
         'url' => ['/site/logout'],
         'linkOptions' => [
             'data-method' => 'post',
@@ -38,21 +46,25 @@ $items = [
 ];
 
 ?>
+
 <header id="header">
-    <?php NavBar::begin(
-        [
-            'brandLabel' => Yii::$app->name,
-            'brandUrl' => Yii::$app->homeUrl,
-            'options' => ['class' => 'navbar-expand-md navbar-dark bg-dark fixed-top']
+
+    <?php NavBar::begin([
+        'brandLabel' => Yii::$app->name,
+        'brandUrl' => Yii::$app->homeUrl,
+        'options' => [
+            'class' => 'navbar-expand-md navbar-dark bg-dark fixed-top'
         ],
-    ) ?>
-    <?= Nav::widget(
-        [
-            'options' => ['class' => 'navbar-nav me-auto'],
-            'encodeLabels' => false,
-            'items' => $items,
+    ]) ?>
+
+    <?= Nav::widget([
+        'options' => [
+            'class' => 'navbar-nav me-auto'
         ],
-    ) ?>
+        'encodeLabels' => false,
+        'items' => $items,
+    ]) ?>
+
     <?= Html::button(
         '&#127769;',
         [
@@ -61,5 +73,7 @@ $items = [
             'aria-label' => 'Switch to dark mode',
         ],
     ) ?>
+
     <?php NavBar::end() ?>
+
 </header>

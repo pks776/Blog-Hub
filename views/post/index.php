@@ -217,8 +217,7 @@ $this->params['breadcrumbs'][] = $this->title;
                     ]);
                 },
 
-                'template' =>
-                    '{view} {update} {delete} {approve} {reject} {unpublish}',
+                'template' => '{view} {update} {delete} {approve} {reject} {unpublish} {publish}',
 
                 /*
                  * Which buttons are visible
@@ -262,6 +261,13 @@ $this->params['breadcrumbs'][] = $this->title;
                             $model->status
                                 != Post::STATUS_PUBLISHED;
                     },
+                    'publish' => function ($model) {
+    return in_array(
+        Yii::$app->user->identity->role,
+        ['admin', 'moderator']
+    )
+    && $model->status === Post::STATUS_UNPUBLISHED;
+},
 
                     /*
                      * Approve
@@ -337,6 +343,16 @@ $this->params['breadcrumbs'][] = $this->title;
                             ]
                         );
                     },
+
+                    'publish' => function ($url) {
+    return Html::a('Publish', $url, [
+        'class' => 'btn btn-success btn-sm me-1',
+        'data' => [
+            'method' => 'post',
+            'confirm' => 'Publish this blog again?',
+        ],
+    ]);
+},
 
                     'update' => function ($url) {
 

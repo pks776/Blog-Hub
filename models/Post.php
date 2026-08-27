@@ -9,10 +9,11 @@ use yii\web\UploadedFile;
 class Post extends \yii\db\ActiveRecord
 {
     const STATUS_DRAFT = 'draft';
-    const STATUS_PENDING = 'pending';
-    const STATUS_PUBLISHED = 'published';
-    const STATUS_REJECTED = 'rejected';
-    const STATUS_DELETED = 'deleted';
+const STATUS_PENDING = 'pending';
+const STATUS_PUBLISHED = 'published';
+const STATUS_REJECTED = 'rejected';
+const STATUS_UNPUBLISHED = 'unpublished';
+const STATUS_DELETED = 'deleted';
 
     // Virtual attribute for file upload
     public $imageFile;
@@ -127,15 +128,15 @@ class Post extends \yii\db\ActiveRecord
      * Status options
      */
     public static function optsStatus()
-    {
-        return [
-            self::STATUS_DRAFT => 'Draft',
-            self::STATUS_PENDING => 'Pending',
-            self::STATUS_PUBLISHED => 'Published',
-            self::STATUS_REJECTED => 'Rejected',
-            self::STATUS_DELETED => 'Deleted',
-        ];
-    }
+{
+    return [
+        self::STATUS_DRAFT => 'Draft',
+        self::STATUS_PENDING => 'Pending',
+        self::STATUS_PUBLISHED => 'Published',
+        self::STATUS_REJECTED => 'Rejected',
+        self::STATUS_DELETED => 'Deleted',
+    ];
+}
 
     /**
      * Display status
@@ -197,6 +198,15 @@ class Post extends \yii\db\ActiveRecord
         $this->status = self::STATUS_REJECTED;
     }
 
+    public function isStatusUnpublished()
+{
+    return $this->status === self::STATUS_UNPUBLISHED;
+}
+
+public function setStatusToUnpublished()
+{
+    $this->status = self::STATUS_UNPUBLISHED;
+}
     /**
      * Deleted
      */

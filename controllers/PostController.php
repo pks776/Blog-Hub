@@ -4,6 +4,7 @@ namespace app\controllers;
 
 use app\models\Post;
 use app\models\PostSearch;
+use app\models\AuditLog;
 use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\filters\VerbFilter;
@@ -26,6 +27,7 @@ class PostController extends Controller
                     'approve-version' => ['POST'],
                     'reject-version' => ['GET', 'POST'],
                     'unpublish' => ['POST'],
+                    'publish' => ['POST'],
                 ],
             ],
         ];
@@ -189,6 +191,14 @@ public function actionRejectVersion($id)
         if (!$version->save(false)) {
             throw new \Exception('Unable to reject the blog version.');
         }
+        AuditLog::record(
+    'rejected',
+    'Post',
+    $post->id,
+    'Blog "' . $post->title . '" Version ' .
+    $version->version . ' was rejected. Reason: ' .
+    $reason
+);
 
         // Update the main post
         $post->status = Post::STATUS_REJECTED;
@@ -286,12 +296,20 @@ public function actionCreate()
                     throw new \Exception('Unable to save post version.');
                 }
 
-                $transaction->commit();
+               $transaction->commit();
 
-                Yii::$app->session->setFlash(
-                    'success',
-                    'Your blog has been submitted for Admin approval.'
-                );
+AuditLog::record(
+    'created',
+    'Post',
+    $model->id,
+    'Blog "' . $model->title . '" was created and submitted for approval.'
+);
+
+
+Yii::$app->session->setFlash(
+    'success',
+    'Your blog has been submitted for Admin approval.'
+);
 
                 return $this->redirect(['my-posts']);
 
@@ -319,7 +337,7 @@ public function actionUpdate($id)
     $role = Yii::$app->user->identity->role;
 
     // Only bloggers can edit blogs
-    if ($role != 'blogger') {
+    if ($role !== 'blogger') {
         throw new ForbiddenHttpException(
             'Only bloggers can edit blogs.'
         );
@@ -340,7 +358,7 @@ public function actionUpdate($id)
             'imageFile'
         );
 
-        // Keep the current image
+        // Keep the existing image
         $image = $model->image;
 
         // Upload new image if provided
@@ -375,29 +393,69 @@ public function actionUpdate($id)
             $image = $fileName;
         }
 
-        // Get latest version number
-        $latestVersion = PostVersion::find()
-            ->where(['post_id' => $model->id])
-            ->max('version');
+        $transaction = Yii::$app->db->beginTransaction();
 
-        $nextVersion = $latestVersion
-            ? $latestVersion + 1
-            : 1;
+        try {
 
-        // Create a new version
-        $version = new PostVersion();
+            // Get the latest version for this post
+            $latestVersion = PostVersion::find()
+                ->where([
+                    'post_id' => $model->id,
+                ])
+                ->max('version');
 
-        $version->post_id = $model->id;
-        $version->version = $nextVersion;
-        $version->title = $model->title;
-        $version->content = $model->content;
-        $version->image = $image;
-        $version->status = PostVersion::STATUS_PENDING;
-        $version->created_by = Yii::$app->user->id;
-        $version->created_at = date('Y-m-d H:i:s');
-        $version->updated_at = date('Y-m-d H:i:s');
+            $nextVersion = $latestVersion !== null
+                ? ((int) $latestVersion + 1)
+                : 1;
 
-        if ($version->save()) {
+            // Create a completely new version
+            $version = new PostVersion();
+
+            $version->post_id = $model->id;
+            $version->version = $nextVersion;
+
+            $version->title = $model->title;
+            $version->content = $model->content;
+            $version->image = $image;
+
+            // New changes always require approval
+            $version->status = PostVersion::STATUS_PENDING;
+
+            $version->created_by = Yii::$app->user->id;
+            $version->created_at = date('Y-m-d H:i:s');
+            $version->updated_at = date('Y-m-d H:i:s');
+
+            if ($version->save()) {
+
+    AuditLog::record(
+        'updated',
+        'Post',
+        $model->id,
+        'Blog "' . $model->title . '" was updated and Version ' .
+        $nextVersion . ' was submitted for approval.'
+    );
+
+    Yii::$app->session->setFlash(
+        'success',
+        'Blog updated and sent for approval.'
+    );
+
+    return $this->redirect([
+        'my-posts'
+    ]);
+}
+
+            /*
+             * IMPORTANT:
+             *
+             * Do NOT update $model here.
+             *
+             * The existing published blog must remain
+             * unchanged until Admin/Moderator approves
+             * this new version.
+             */
+
+            $transaction->commit();
 
             Yii::$app->session->setFlash(
                 'success',
@@ -407,14 +465,22 @@ public function actionUpdate($id)
             return $this->redirect([
                 'my-posts'
             ]);
-        }
 
-        // Show version validation errors
-        Yii::$app->session->setFlash(
-            'error',
-            'Unable to create new version: ' .
-            json_encode($version->errors)
-        );
+        } catch (\Throwable $e) {
+
+            $transaction->rollBack();
+
+            Yii::error(
+                'Create Post Version Error: ' .
+                $e->getMessage(),
+                __METHOD__
+            );
+
+            Yii::$app->session->setFlash(
+                'error',
+                'Unable to create new blog version.'
+            );
+        }
     }
 
     return $this->render('update', [
@@ -576,6 +642,96 @@ public function actionApprove($id)
 }
 //action unpublish
 
+public function actionPublish($id)
+{
+    // Only Admin and Moderator can publish
+    if (
+        Yii::$app->user->identity->role != 'admin' &&
+        Yii::$app->user->identity->role != 'moderator'
+    ) {
+        throw new ForbiddenHttpException('Access Denied');
+    }
+
+    $post = $this->findModel($id);
+
+    // Only unpublished posts can be published from here
+    if ($post->status !== Post::STATUS_UNPUBLISHED) {
+        throw new BadRequestHttpException(
+            'Only unpublished blogs can be published.'
+        );
+    }
+
+    $transaction = Yii::$app->db->beginTransaction();
+
+    try {
+
+        /*
+         * Get the most recent version of the blog.
+         *
+         * Publishing an unpublished blog does NOT create
+         * a new content version.
+         */
+        $version = PostVersion::find()
+            ->where([
+                'post_id' => $post->id,
+            ])
+            ->orderBy([
+                'version' => SORT_DESC,
+            ])
+            ->one();
+
+        if ($version === null) {
+            throw new NotFoundHttpException(
+                'No version found for this blog.'
+            );
+        }
+
+        /*
+         * Update the main post.
+         */
+        $post->status = Post::STATUS_PUBLISHED;
+        $post->rejection_reason = null;
+        $post->updated_at = date('Y-m-d H:i:s');
+
+        if (!$post->save(false)) {
+            throw new \Exception(
+                'Unable to publish blog.'
+            );
+        }
+
+        /*
+         * Audit log.
+         */
+        AuditLog::record(
+            'published',
+            'Post',
+            $post->id,
+            'Blog "' . $post->title .
+            '" was published again.'
+        );
+
+        $transaction->commit();
+
+        Yii::$app->session->setFlash(
+            'success',
+            'Blog published successfully.'
+        );
+
+    } catch (\Throwable $e) {
+
+        $transaction->rollBack();
+
+        Yii::error(
+            'Publish Error: ' . $e->getMessage(),
+            __METHOD__
+        );
+
+        throw $e;
+    }
+
+    return $this->redirect(['index']);
+}
+
 public function actionUnpublish($id)
 {
     if (
@@ -591,58 +747,43 @@ public function actionUnpublish($id)
 
     try {
 
-        // Get the latest version number for this post
-        $latestVersion = PostVersion::find()
-            ->where(['post_id' => $post->id])
-            ->max('version');
-
-        // Create a new pending version
-        $version = new PostVersion();
-
-        $version->post_id = $post->id;
-        $version->version = ($latestVersion ?: 0) + 1;
-        $version->title = $post->title;
-        $version->content = $post->content;
-        $version->image = $post->image;
-        $version->status = PostVersion::STATUS_PENDING;
-        $version->created_by = Yii::$app->user->id;
-        $version->created_at = date('Y-m-d H:i:s');
-        $version->updated_at = date('Y-m-d H:i:s');
-
-        if (!$version->save()) {
-            throw new \Exception(
-                'Unable to create pending version: ' .
-                json_encode($version->errors)
-            );
-        }
-
-        // Change the main post to pending
-        $post->status = Post::STATUS_PENDING;
+        // Change the main post to unpublished
+        $post->status = Post::STATUS_UNPUBLISHED;
         $post->rejection_reason = null;
 
         if (!$post->save(false)) {
-            throw new \Exception('Unable to update post.');
+            throw new \Exception('Unable to unpublish post.');
         }
+
+        // Record the action in audit history
+        AuditLog::record(
+            'unpublished',
+            'Post',
+            $post->id,
+            'Blog "' . $post->title . '" was unpublished.'
+        );
 
         $transaction->commit();
 
         Yii::$app->session->setFlash(
             'success',
-            'Blog has been sent for approval.'
+            'Blog unpublished successfully.'
         );
 
     } catch (\Throwable $e) {
 
         $transaction->rollBack();
 
-        Yii::error($e->getMessage());
+        Yii::error(
+            'Unpublish Error: ' . $e->getMessage(),
+            __METHOD__
+        );
 
         throw $e;
     }
 
     return $this->redirect(['index']);
 }
-
 /**
      * ApproveVersion
      */
@@ -708,6 +849,13 @@ public function actionApproveVersion($id)
         if (!$version->save(false)) {
             throw new \Exception('Unable to update version.');
         }
+        AuditLog::record(
+    'approved',
+    'Post',
+    $post->id,
+    'Blog "' . $post->title . '" Version ' .
+    $version->version . ' was approved and published.'
+);
 
         $transaction->commit();
 

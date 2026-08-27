@@ -17,6 +17,7 @@ use yii\mail\MailerInterface;
 use yii\web\Controller;
 use yii\web\ErrorAction;
 use yii\web\Response;
+use app\models\AuditLog;
 
 class SiteController extends Controller
 {

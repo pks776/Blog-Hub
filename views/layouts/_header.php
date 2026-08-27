@@ -21,6 +21,16 @@ $items = [
     ],
 
     [
+    'label' => 'History',
+    'url' => ['/audit-log/index'],
+    'visible' => !Yii::$app->user->isGuest
+        && in_array(
+            Yii::$app->user->identity->role,
+            ['admin', 'moderator']
+        ),
+],
+
+    [
         'label' => 'Profile',
         'url' => ['/profile/index'],
         'visible' => !Yii::$app->user->isGuest,

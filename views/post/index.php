@@ -22,14 +22,17 @@ $this->params['breadcrumbs'][] = $this->title;
     <h1><?= Html::encode($this->title) ?></h1>
 
     <?php if (
-        Yii::$app->user->identity->role == 'blogger'
+        !Yii::$app->user->isGuest &&
+        Yii::$app->user->identity->role === 'blogger'
     ): ?>
 
         <p>
             <?= Html::a(
                 'Create Post',
                 ['create'],
-                ['class' => 'btn btn-success']
+                [
+                    'class' => 'btn btn-success',
+                ]
             ) ?>
         </p>
 
@@ -44,22 +47,37 @@ $this->params['breadcrumbs'][] = $this->title;
 
         'tableOptions' => [
             'class' =>
-                'table table-bordered table-striped table-hover',
+                'table table-bordered table-striped table-hover align-middle',
         ],
 
         'columns' => [
 
-            'id',
+            // ==========================================
+            // ID
+            // ==========================================
+
+            [
+                'attribute' => 'id',
+                'label' => 'ID',
+                'headerOptions' => [
+                    'style' => 'width:70px;',
+                ],
+            ],
+
+
+            // ==========================================
+            // TITLE
+            // ==========================================
 
             [
                 'attribute' => 'title',
                 'label' => 'Title',
             ],
 
-            [
-                'attribute' => 'content',
-                'format' => 'ntext',
-            ],
+
+            // ==========================================
+            // AUTHOR
+            // ==========================================
 
             [
                 'attribute' => 'author_id',
@@ -73,12 +91,43 @@ $this->params['breadcrumbs'][] = $this->title;
                 },
             ],
 
-            /*
-             * Status
-             */
+
+            // ==========================================
+            // VERSION
+            // ==========================================
+
+            [
+                'label' => 'Version',
+
+                'value' => function ($model) {
+
+                    $version = PostVersion::find()
+                        ->where([
+                            'post_id' => $model->id,
+                        ])
+                        ->orderBy([
+                            'version' => SORT_DESC,
+                        ])
+                        ->one();
+
+                    return $version
+                        ? 'V' . $version->version
+                        : '—';
+                },
+
+                'headerOptions' => [
+                    'style' => 'width:100px;',
+                ],
+            ],
+
+
+            // ==========================================
+            // STATUS
+            // ==========================================
+
             [
                 'attribute' => 'status',
-
+                'label' => 'Status',
                 'format' => 'raw',
 
                 'value' => function ($model) {
@@ -87,83 +136,58 @@ $this->params['breadcrumbs'][] = $this->title;
 
                         case Post::STATUS_PENDING:
 
-                            return
-                                '<span class="badge bg-warning text-dark">'
-                                . 'Pending'
-                                . '</span>';
+                            return '<span class="badge bg-warning text-dark px-3 py-2">
+                                        Pending
+                                    </span>';
 
                         case Post::STATUS_PUBLISHED:
 
-                            return
-                                '<span class="badge bg-success">'
-                                . 'Published'
-                                . '</span>';
+                            return '<span class="badge bg-success px-3 py-2">
+                                        Published
+                                    </span>';
 
                         case Post::STATUS_REJECTED:
 
-                            return
-                                '<span class="badge bg-danger">'
-                                . 'Rejected'
-                                . '</span>';
+                            return '<span class="badge bg-danger px-3 py-2">
+                                        Rejected
+                                    </span>';
+
+                        case Post::STATUS_UNPUBLISHED:
+
+                            return '<span class="badge bg-secondary px-3 py-2">
+                                        Unpublished
+                                    </span>';
+
+                        case Post::STATUS_DRAFT:
+
+                            return '<span class="badge bg-light text-dark px-3 py-2">
+                                        Draft
+                                    </span>';
+
+                        case Post::STATUS_DELETED:
+
+                            return '<span class="badge bg-dark px-3 py-2">
+                                        Deleted
+                                    </span>';
 
                         default:
 
-                            return Html::encode(
-                                $model->status
-                            );
+                            return '<span class="badge bg-secondary px-3 py-2">'
+                                . Html::encode($model->status)
+                                . '</span>';
                     }
                 },
-            ],
 
-            /*
-             * Moderator Feedback
-             */
-            [
-                'label' => 'Moderator Feedback',
-
-                'value' => function ($model) {
-
-                    $rejectedVersion =
-                        PostVersion::find()
-                            ->where([
-                                'post_id' => $model->id,
-                                'status' =>
-                                    PostVersion::STATUS_REJECTED,
-                            ])
-                            ->orderBy([
-                                'version' => SORT_DESC,
-                            ])
-                            ->one();
-
-                    if (
-                        $rejectedVersion &&
-                        $rejectedVersion->rejection_reason
-                    ) {
-                        return
-                            $rejectedVersion->rejection_reason;
-                    }
-
-                    return '-';
-                },
-            ],
-
-            /*
-             * Created Date
-             */
-            [
-                'attribute' => 'created_at',
-
-                'label' => 'Created On',
-
-                'format' => [
-                    'date',
-                    'php:d M Y',
+                'headerOptions' => [
+                    'style' => 'width:150px;',
                 ],
             ],
 
-            /*
-             * Actions
-             */
+
+            // ==========================================
+            // ACTIONS
+            // ==========================================
+
             [
                 'class' => ActionColumn::class,
 
@@ -184,24 +208,22 @@ $this->params['breadcrumbs'][] = $this->title;
                      */
                     if ($action === 'reject') {
 
-                        $pendingVersion =
-                            PostVersion::find()
-                                ->where([
-                                    'post_id' => $model->id,
-                                    'status' =>
-                                        PostVersion::STATUS_PENDING,
-                                ])
-                                ->orderBy([
-                                    'version' => SORT_DESC,
-                                ])
-                                ->one();
+                        $pendingVersion = PostVersion::find()
+                            ->where([
+                                'post_id' => $model->id,
+                                'status' =>
+                                    PostVersion::STATUS_PENDING,
+                            ])
+                            ->orderBy([
+                                'version' => SORT_DESC,
+                            ])
+                            ->one();
 
                         if ($pendingVersion) {
 
                             return Url::toRoute([
                                 'reject-version',
-                                'id' =>
-                                    $pendingVersion->id,
+                                'id' => $pendingVersion->id,
                             ]);
                         }
 
@@ -209,7 +231,8 @@ $this->params['breadcrumbs'][] = $this->title;
                     }
 
                     /*
-                     * Other actions use Post ID
+                     * All other actions
+                     * use Post ID.
                      */
                     return Url::toRoute([
                         $action,
@@ -217,32 +240,52 @@ $this->params['breadcrumbs'][] = $this->title;
                     ]);
                 },
 
-                'template' => '{view} {update} {delete} {approve} {reject} {unpublish} {publish}',
 
                 /*
-                 * Which buttons are visible
+                 * Keep all existing actions.
                  */
+                'template' =>
+                    '{view} {update} {delete} {approve} {reject} {unpublish} {publish}',
+
+
+                // ==========================================
+                // BUTTON VISIBILITY
+                // ==========================================
+
                 'visibleButtons' => [
 
+                    /*
+                     * View
+                     */
                     'view' => function ($model) {
+
                         return true;
                     },
 
+
+                    /*
+                     * Update
+                     */
                     'update' => function ($model) {
 
                         return
-                            Yii::$app->user->identity->role
-                                == 'blogger'
+                            Yii::$app->user->identity->role === 'blogger'
                             &&
-                            $model->author_id
-                                == Yii::$app->user->id;
+                            $model->author_id == Yii::$app->user->id;
                     },
 
+
+                    /*
+                     * Delete
+                     */
                     'delete' => function ($model) {
 
                         $role =
                             Yii::$app->user->identity->role;
 
+                        /*
+                         * Admin and Moderator
+                         */
                         if (
                             in_array(
                                 $role,
@@ -252,22 +295,32 @@ $this->params['breadcrumbs'][] = $this->title;
                             return true;
                         }
 
+                        /*
+                         * Blogger
+                         */
                         return
-                            $role == 'blogger'
+                            $role === 'blogger'
                             &&
-                            $model->author_id
-                                == Yii::$app->user->id
+                            $model->author_id == Yii::$app->user->id
                             &&
-                            $model->status
-                                != Post::STATUS_PUBLISHED;
+                            $model->status !== Post::STATUS_PUBLISHED;
                     },
+
+
+                    /*
+                     * Publish
+                     */
                     'publish' => function ($model) {
-    return in_array(
-        Yii::$app->user->identity->role,
-        ['admin', 'moderator']
-    )
-    && $model->status === Post::STATUS_UNPUBLISHED;
-},
+
+                        return
+                            in_array(
+                                Yii::$app->user->identity->role,
+                                ['admin', 'moderator']
+                            )
+                            &&
+                            $model->status === Post::STATUS_UNPUBLISHED;
+                    },
+
 
                     /*
                      * Approve
@@ -280,9 +333,9 @@ $this->params['breadcrumbs'][] = $this->title;
                                 ['admin', 'moderator']
                             )
                             &&
-                            $model->status
-                                == Post::STATUS_PENDING;
+                            $model->status === Post::STATUS_PENDING;
                     },
+
 
                     /*
                      * Reject
@@ -300,7 +353,7 @@ $this->params['breadcrumbs'][] = $this->title;
 
                         /*
                          * Show Reject only when
-                         * there is a pending version.
+                         * a pending version exists.
                          */
                         return PostVersion::find()
                             ->where([
@@ -310,6 +363,7 @@ $this->params['breadcrumbs'][] = $this->title;
                             ])
                             ->exists();
                     },
+
 
                     /*
                      * Unpublish
@@ -322,16 +376,20 @@ $this->params['breadcrumbs'][] = $this->title;
                                 ['admin', 'moderator']
                             )
                             &&
-                            $model->status
-                                == Post::STATUS_PUBLISHED;
+                            $model->status === Post::STATUS_PUBLISHED;
                     },
                 ],
 
-                /*
-                 * Buttons
-                 */
+
+                // ==========================================
+                // BUTTONS
+                // ==========================================
+
                 'buttons' => [
 
+                    /*
+                     * View
+                     */
                     'view' => function ($url) {
 
                         return Html::a(
@@ -344,16 +402,10 @@ $this->params['breadcrumbs'][] = $this->title;
                         );
                     },
 
-                    'publish' => function ($url) {
-    return Html::a('Publish', $url, [
-        'class' => 'btn btn-success btn-sm me-1',
-        'data' => [
-            'method' => 'post',
-            'confirm' => 'Publish this blog again?',
-        ],
-    ]);
-},
 
+                    /*
+                     * Edit
+                     */
                     'update' => function ($url) {
 
                         return Html::a(
@@ -366,6 +418,10 @@ $this->params['breadcrumbs'][] = $this->title;
                         );
                     },
 
+
+                    /*
+                     * Delete
+                     */
                     'delete' => function ($url) {
 
                         return Html::a(
@@ -384,6 +440,10 @@ $this->params['breadcrumbs'][] = $this->title;
                         );
                     },
 
+
+                    /*
+                     * Approve
+                     */
                     'approve' => function ($url) {
 
                         return Html::a(
@@ -402,6 +462,10 @@ $this->params['breadcrumbs'][] = $this->title;
                         );
                     },
 
+
+                    /*
+                     * Reject
+                     */
                     'reject' => function ($url) {
 
                         return Html::a(
@@ -414,6 +478,10 @@ $this->params['breadcrumbs'][] = $this->title;
                         );
                     },
 
+
+                    /*
+                     * Unpublish
+                     */
                     'unpublish' => function ($url) {
 
                         return Html::a(
@@ -421,7 +489,7 @@ $this->params['breadcrumbs'][] = $this->title;
                             $url,
                             [
                                 'class' =>
-                                    'btn btn-secondary btn-sm',
+                                    'btn btn-secondary btn-sm me-1',
 
                                 'data' => [
                                     'method' => 'post',
@@ -431,9 +499,33 @@ $this->params['breadcrumbs'][] = $this->title;
                             ]
                         );
                     },
+
+
+                    /*
+                     * Publish
+                     */
+                    'publish' => function ($url) {
+
+                        return Html::a(
+                            'Publish',
+                            $url,
+                            [
+                                'class' =>
+                                    'btn btn-success btn-sm me-1',
+
+                                'data' => [
+                                    'method' => 'post',
+                                    'confirm' =>
+                                        'Publish this blog again?',
+                                ],
+                            ]
+                        );
+                    },
                 ],
             ],
+
         ],
-    ]); ?>
+
+    ]) ?>
 
 </div>

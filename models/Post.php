@@ -4,7 +4,6 @@ namespace app\models;
 
 use app\models\User;
 use app\models\PostVersion;
-use yii\web\UploadedFile;
 
 class Post extends \yii\db\ActiveRecord
 {
@@ -15,8 +14,13 @@ const STATUS_REJECTED = 'rejected';
 const STATUS_UNPUBLISHED = 'unpublished';
 const STATUS_DELETED = 'deleted';
 
+
     // Virtual attribute for file upload
     public $imageFile;
+    public $content;
+    public $image;
+    public $slug;
+    public $rejection_reason;
 
     /**
      * {@inheritdoc}
@@ -52,8 +56,6 @@ const STATUS_DELETED = 'deleted';
                 'in',
                 'range' => array_keys(self::optsStatus())
             ],
-
-            [['slug'], 'unique'],
 
             [
                 ['author_id'],
